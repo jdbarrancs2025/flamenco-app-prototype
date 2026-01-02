@@ -10,8 +10,8 @@ export function Home() {
       <Header title="Menú de Inicio" />
       <Pills activeTab="mixer" />
 
-      {/* Playlist Cards */}
-      <div className="flex gap-3 px-4 pt-3">
+      {/* Playlist Cards - 56px gap from pills (168px - 112px in Figma) */}
+      <div className="flex" style={{ gap: '12px', paddingLeft: '16px', paddingRight: '10px', marginTop: '24px' }}>
         {playlists.map((playlist) => (
           <PlaylistCard key={playlist.id} playlist={playlist} />
         ))}

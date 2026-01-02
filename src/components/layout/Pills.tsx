@@ -10,29 +10,38 @@ const tabs = [
 
 export function Pills({ activeTab = 'mixer' }: PillsProps) {
   return (
-    <nav className="flex items-center gap-3 px-4 py-2">
+    <nav className="flex items-center" style={{ gap: '12px', paddingLeft: '16px', paddingRight: '16px', height: '32px' }}>
       {tabs.map((tab) => (
         <button
           key={tab.id}
           className={`
-            flex justify-center items-center px-[14px] py-[6px] rounded-[20px]
-            font-medium text-sm leading-[140%] transition-colors whitespace-nowrap
+            flex justify-center items-center rounded-full
+            font-medium transition-colors whitespace-nowrap shrink-0
             ${tab.id === activeTab
-              ? 'bg-[rgba(0,0,0,0.9)] text-white'
-              : 'bg-[#F6F6F6] text-black'
+              ? 'text-white'
+              : 'text-black'
             }
           `}
+          style={{
+            padding: '6px 14px',
+            fontSize: '14px',
+            lineHeight: '1.4',
+            backgroundColor: tab.id === activeTab ? 'rgba(0,0,0,0.9)' : '#F6F6F6',
+            borderRadius: '20px'
+          }}
           disabled={tab.id !== 'mixer'}
         >
           {tab.label}
         </button>
       ))}
-      {/* Three dots indicator */}
-      <div className="flex items-center gap-[3px] ml-auto">
-        <span className="w-[6px] h-[6px] bg-black rounded-full" />
-        <span className="w-[6px] h-[6px] bg-black rounded-full" />
-        <span className="w-[6px] h-[6px] bg-black rounded-full" />
-      </div>
+      {/* Three dots menu button */}
+      <button className="flex items-center justify-center ml-auto" style={{ width: '48px', height: '48px', marginRight: '-12px' }}>
+        <div className="flex items-center" style={{ gap: '4px' }}>
+          <span className="bg-black rounded-full" style={{ width: '6px', height: '6px' }} />
+          <span className="bg-black rounded-full" style={{ width: '6px', height: '6px' }} />
+          <span className="bg-black rounded-full" style={{ width: '6px', height: '6px' }} />
+        </div>
+      </button>
     </nav>
   );
 }

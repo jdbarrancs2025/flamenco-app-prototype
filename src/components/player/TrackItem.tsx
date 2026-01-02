@@ -1,11 +1,11 @@
 import type { Track } from '../../types';
 
-// Custom waveform icon component
-function WaveformIcon({ size = 24, className = '' }: { size?: number; className?: string }) {
+// Custom waveform icon component matching Figma exactly
+function WaveformIcon({ className = '' }: { className?: string }) {
   return (
     <svg
-      width={size}
-      height={size}
+      width="34"
+      height="19"
       viewBox="0 0 34 19"
       fill="none"
       className={className}
@@ -44,34 +44,45 @@ export function TrackItem({
 
   return (
     <div
-      className="flex items-center py-2 gap-3 cursor-pointer"
+      className="flex items-center cursor-pointer"
+      style={{ padding: '8px 0' }}
       onClick={onSelect}
     >
       <div className="flex-1 flex flex-col min-w-0">
         <span
-          className={`font-medium text-sm leading-[140%] truncate ${
-            isActive ? 'text-primary' : 'text-black'
-          }`}
+          className="font-medium"
+          style={{
+            fontSize: '14px',
+            lineHeight: '1.4',
+            color: isActive ? '#6750A4' : '#000000'
+          }}
         >
           {track.name}
         </span>
-        <span className="font-normal text-xs leading-[150%] text-gray-500">
+        <span
+          className="font-normal"
+          style={{ fontSize: '12px', lineHeight: '1.5', color: '#828282' }}
+        >
           {compasesText}
         </span>
       </div>
 
       {track.hasMuteableGuitar && (
         <button
-          className={`w-[34px] h-[19px] flex items-center justify-center flex-shrink-0 ${
-            isGuitarMuted ? 'text-primary' : 'text-black'
-          }`}
+          className="flex items-center justify-center flex-shrink-0"
+          style={{
+            width: '34px',
+            height: '19px',
+            marginLeft: '12px',
+            color: isGuitarMuted ? '#6750A4' : '#000000'
+          }}
           onClick={(e) => {
             e.stopPropagation();
             onToggleMute?.();
           }}
           aria-label="Silenciar guitarra"
         >
-          <WaveformIcon size={34} />
+          <WaveformIcon />
         </button>
       )}
     </div>

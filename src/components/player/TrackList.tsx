@@ -19,16 +19,30 @@ export function TrackList({
   onToggleMute,
 }: TrackListProps) {
   return (
-    <div className="mx-[22px] mb-4 bg-white border border-[#E0E0E0] rounded-lg overflow-hidden flex flex-col max-h-full">
+    <div
+      className="bg-white overflow-hidden flex flex-col"
+      style={{
+        margin: '0 22px 16px 22px',
+        border: '1px solid #E0E0E0',
+        borderRadius: '8px',
+        maxHeight: '406px'
+      }}
+    >
       {/* Header */}
-      <div className="px-4 pt-4 pb-2 flex-shrink-0">
-        <h2 className="font-semibold text-sm leading-[140%] text-black">
+      <div className="flex-shrink-0" style={{ padding: '16px 16px 8px 16px' }}>
+        <h2
+          className="font-semibold text-black"
+          style={{ fontSize: '14px', lineHeight: '1.4' }}
+        >
           {title}
         </h2>
       </div>
 
       {/* Track list - scrollable */}
-      <div className="px-4 pb-4 overflow-y-auto track-list-scroll flex-1 min-h-0">
+      <div
+        className="overflow-y-auto flex-1 min-h-0"
+        style={{ padding: '0 16px 16px 16px' }}
+      >
         {tracks.map((track, index) => (
           <TrackItem
             key={track.id}

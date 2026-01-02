@@ -13,24 +13,29 @@ export function SpeedSlider({ value = 1.0, onChange }: SpeedSliderProps) {
   };
 
   return (
-    <div className="w-full px-[11px] py-2">
-      <div className="relative w-full h-[44px] flex items-center">
+    <div className="w-full flex items-center" style={{ padding: '0 11px', height: '44px' }}>
+      <div className="relative w-full flex items-center" style={{ height: '16px' }}>
         {/* Track background */}
-        <div className="absolute w-full h-4 flex">
+        <div className="absolute w-full flex" style={{ height: '16px' }}>
           {/* Active (purple) portion */}
           <div
-            className="h-full bg-primary rounded-l-[16px]"
-            style={{ width: `${percentage}%` }}
+            className="h-full"
+            style={{ width: `${percentage}%`, backgroundColor: '#6750A4', borderRadius: '16px 0 0 16px' }}
           />
           {/* Handle */}
-          <div className="w-1 h-[44px] bg-primary rounded-sm -my-[14px]" />
+          <div style={{ width: '4px', height: '44px', backgroundColor: '#6750A4', borderRadius: '2px', marginTop: '-14px' }} />
           {/* Inactive (light purple) portion */}
           <div
-            className="h-full bg-primary-container rounded-r-[16px] flex-1"
-          />
+            className="h-full flex-1 relative"
+            style={{ backgroundColor: '#E8DEF8', borderRadius: '0 16px 16px 0' }}
+          >
+            {/* Stop dot at end */}
+            <div
+              className="absolute top-1/2 rounded-full"
+              style={{ right: '4px', transform: 'translateY(-50%)', width: '4px', height: '4px', backgroundColor: '#4A4459' }}
+            />
+          </div>
         </div>
-        {/* Dot at the end */}
-        <div className="absolute right-0 w-2 h-2 bg-primary-container rounded-full" />
 
         {/* Hidden range input for interaction */}
         <input
@@ -40,7 +45,8 @@ export function SpeedSlider({ value = 1.0, onChange }: SpeedSliderProps) {
           step="0.01"
           value={value}
           onChange={handleChange}
-          className="absolute w-full h-full opacity-0 cursor-pointer z-10"
+          className="absolute w-full h-full opacity-0 cursor-pointer"
+          style={{ zIndex: 10 }}
           aria-label="Velocidad de reproducción"
         />
       </div>

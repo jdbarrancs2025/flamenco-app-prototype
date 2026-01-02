@@ -90,8 +90,8 @@ export function PlaylistView() {
       <Header title="Nivel Intermedio" />
       <Pills activeTab="mixer" />
 
-      {/* Speed Slider */}
-      <div className="mt-2">
+      {/* Speed Slider - 52px below pills (164px - 112px in Figma) */}
+      <div style={{ marginTop: '20px' }}>
         <SpeedSlider value={playbackRate} onChange={setPlaybackRate} />
       </div>
 
@@ -107,8 +107,8 @@ export function PlaylistView() {
         onDelete={handleDelete}
       />
 
-      {/* Track List */}
-      <div className="flex-1 overflow-hidden flex flex-col">
+      {/* Track List - fixed height container */}
+      <div style={{ marginTop: '8px' }}>
         <TrackList
           title={`Reproductor: ${playlist.fullTitle}.`}
           tracks={tracks}
@@ -118,6 +118,9 @@ export function PlaylistView() {
           onToggleMute={handleToggleMute}
         />
       </div>
+
+      {/* Spacer to push tab bar down */}
+      <div className="flex-1" />
 
       <TabBar />
     </div>
