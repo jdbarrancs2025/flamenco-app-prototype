@@ -1,0 +1,209 @@
+/* src/styles/design-tokens.css */
+/* Design tokens extracted from Figma - Use as reference */
+
+:root {
+  /* ==================== COLORS ==================== */
+  
+  /* Primary - Purple theme */
+  --color-primary: #6750A4;
+  --color-primary-container: #E8DEF8;
+  --color-on-primary: #FFFFFF;
+  --color-on-primary-container: #4A4459;
+  
+  /* Neutral */
+  --color-black: #000000;
+  --color-white: #FFFFFF;
+  --color-surface: #FFFFFF;
+  --color-on-surface: #1D1B20;
+  
+  /* Gray scale */
+  --color-gray-100: #F6F6F6;
+  --color-gray-300: #E0E0E0;
+  --color-gray-500: #828282;
+  --color-gray-900: rgba(0, 0, 0, 0.9);
+  
+  /* Semantic */
+  --color-text-primary: #000000;
+  --color-text-secondary: #828282;
+  --color-text-active: #6750A4;
+  --color-border: #E0E0E0;
+  --color-background: #FFFFFF;
+  
+  /* ==================== TYPOGRAPHY ==================== */
+  
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  
+  /* Title - Screen headers */
+  --font-title-size: 20px;
+  --font-title-weight: 600;
+  --font-title-line-height: 140%;
+  --font-title-letter-spacing: -0.02em;
+  
+  /* Card Title */
+  --font-card-title-size: 28px;
+  --font-card-title-weight: 600;
+  --font-card-title-line-height: 120%;
+  --font-card-title-letter-spacing: -0.02em;
+  
+  /* Body */
+  --font-body-size: 14px;
+  --font-body-weight: 500;
+  --font-body-line-height: 140%;
+  
+  /* Caption */
+  --font-caption-size: 12px;
+  --font-caption-weight: 500;
+  --font-caption-line-height: 150%;
+  
+  /* Small */
+  --font-small-size: 12px;
+  --font-small-weight: 400;
+  --font-small-line-height: 150%;
+  
+  /* ==================== SPACING ==================== */
+  
+  --spacing-2: 2px;
+  --spacing-4: 4px;
+  --spacing-6: 6px;
+  --spacing-8: 8px;
+  --spacing-10: 10px;
+  --spacing-12: 12px;
+  --spacing-14: 14px;
+  --spacing-16: 16px;
+  --spacing-20: 20px;
+  --spacing-24: 24px;
+  --spacing-32: 32px;
+  
+  /* ==================== BORDER RADIUS ==================== */
+  
+  --radius-sm: 2px;
+  --radius-md: 8px;
+  --radius-lg: 16px;
+  --radius-full: 20px;
+  --radius-pill: 100px;
+  
+  /* ==================== SHADOWS ==================== */
+  
+  --shadow-tab-bar: 0px -0.5px 0px rgba(0, 0, 0, 0.1);
+  
+  /* ==================== SIZES ==================== */
+  
+  /* Header */
+  --header-height: 56px;
+  
+  /* Status bar (iOS) */
+  --status-bar-height: 44px;
+  
+  /* Tab bar */
+  --tab-bar-height: 83px;
+  
+  /* Home indicator */
+  --home-indicator-height: 34px;
+  --home-indicator-width: 134px;
+  
+  /* Pills */
+  --pill-height: 32px;
+  --pill-padding: 6px 14px;
+  
+  /* Cards */
+  --playlist-card-width: 171px;
+  --playlist-card-height: 92px;
+  
+  /* Track list */
+  --track-list-border-radius: 8px;
+  --track-item-height: 54px;
+  --track-item-padding: 8px 0;
+  
+  /* Controls */
+  --control-button-size: 48px;
+  --play-button-width: 61px;
+  --play-button-height: 64px;
+  
+  /* Slider */
+  --slider-height: 44px;
+  --slider-track-height: 16px;
+  --slider-handle-width: 4px;
+  
+  /* Icons */
+  --icon-sm: 24px;
+  --icon-md: 34px;
+  --icon-lg: 48px;
+  
+  /* Viewport (iPhone X reference) */
+  --viewport-width: 375px;
+  --viewport-height: 812px;
+  
+  /* ==================== Z-INDEX ==================== */
+  
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-fixed: 300;
+  --z-modal: 400;
+  --z-toast: 500;
+}
+
+/* ==================== TYPOGRAPHY UTILITIES ==================== */
+
+.text-title {
+  font-family: var(--font-family);
+  font-size: var(--font-title-size);
+  font-weight: var(--font-title-weight);
+  line-height: var(--font-title-line-height);
+  letter-spacing: var(--font-title-letter-spacing);
+}
+
+.text-card-title {
+  font-family: var(--font-family);
+  font-size: var(--font-card-title-size);
+  font-weight: var(--font-card-title-weight);
+  line-height: var(--font-card-title-line-height);
+  letter-spacing: var(--font-card-title-letter-spacing);
+}
+
+.text-body {
+  font-family: var(--font-family);
+  font-size: var(--font-body-size);
+  font-weight: var(--font-body-weight);
+  line-height: var(--font-body-line-height);
+}
+
+.text-caption {
+  font-family: var(--font-family);
+  font-size: var(--font-caption-size);
+  font-weight: var(--font-caption-weight);
+  line-height: var(--font-caption-line-height);
+}
+
+.text-small {
+  font-family: var(--font-family);
+  font-size: var(--font-small-size);
+  font-weight: var(--font-small-weight);
+  line-height: var(--font-small-line-height);
+}
+
+/* ==================== COLOR UTILITIES ==================== */
+
+.text-primary {
+  color: var(--color-text-primary);
+}
+
+.text-secondary {
+  color: var(--color-text-secondary);
+}
+
+.text-active {
+  color: var(--color-text-active);
+}
+
+.bg-surface {
+  background-color: var(--color-surface);
+}
+
+.bg-primary {
+  background-color: var(--color-primary);
+}
+
+.border-default {
+  border: 1px solid var(--color-border);
+}
