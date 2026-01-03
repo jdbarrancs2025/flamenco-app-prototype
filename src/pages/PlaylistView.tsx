@@ -37,6 +37,7 @@ export function PlaylistView() {
   const wasPlayingRef = useRef(false);
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const [mutedTrackIds, setMutedTrackIds] = useState<Set<string>>(new Set());
+  const mutedTrackIdsRef = useRef(mutedTrackIds);
   const [tracks, setTracks] = useState<Track[]>(() =>
     playlist?.tracks ? [...playlist.tracks] : []
   );
@@ -59,26 +60,35 @@ export function PlaylistView() {
     }
   }, [playlistId, playlist, navigate]);
 
-  // Load track when selection changes
+  // Keep mutedTrackIds ref in sync (avoids triggering track reload on mute toggle)
+  useEffect(() => {
+    mutedTrackIdsRef.current = mutedTrackIds;
+  }, [mutedTrackIds]);
+
+  // Load track when selection changes (NOT when mute state changes!)
   useEffect(() => {
     const track = tracks[currentTrackIndex];
     if (track) {
       loadTrack(track).then(() => {
-        setGuitarMuted(mutedTrackIds.has(track.id));
+        // Use ref to get current mute state without adding to deps
+        setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
       });
     }
-  }, [currentTrackIndex, tracks, loadTrack, setGuitarMuted, mutedTrackIds]);
+  }, [currentTrackIndex, tracks, loadTrack, setGuitarMuted]);
 
   // Auto-advance on track end
   useEffect(() => {
     onTrackEnd(() => {
+      // Always set wasPlayingRef to trigger auto-play after track loads
+      wasPlayingRef.current = true;
+
       if (isLooping) {
-        // Replay current track
+        // Replay current track - load it again to reset position
         const track = tracks[currentTrackIndex];
         if (track) {
           loadTrack(track).then(() => {
-            setGuitarMuted(mutedTrackIds.has(track.id));
-            play();
+            setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
+            // Auto-play effect will call play() when loading completes
           });
         }
       } else {
@@ -87,7 +97,7 @@ export function PlaylistView() {
         setCurrentTrackIndex(nextIndex);
       }
     });
-  }, [currentTrackIndex, isLooping, tracks, mutedTrackIds, onTrackEnd, loadTrack, setGuitarMuted, play]);
+  }, [currentTrackIndex, isLooping, tracks, onTrackEnd, loadTrack, setGuitarMuted]);
 
   // Auto-play when track changes (if was playing)
   useEffect(() => {
