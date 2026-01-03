@@ -105,12 +105,13 @@ export function PlaylistView() {
   const canMuteGuitar = currentTrack?.hasMuteableGuitar ?? false;
   const isGuitarMuted = currentTrack ? mutedTrackIds.has(currentTrack.id) : false;
 
-  const handlePlayPause = async () => {
+  const handlePlayPause = () => {
     if (audioState.isPlaying) {
       pause();
     } else {
-      // Initialize AudioContext on user gesture (iOS Safari requirement)
-      await initialize();
+      // Initialize AudioContext synchronously on user gesture (iOS requirement)
+      // Must NOT use await - gesture context expires if async
+      initialize();
       play();
     }
   };

@@ -66,20 +66,45 @@ class AudioEngine {
   private onStateChangeCallback: (() => void) | null = null;
 
   /**
-   * Initialize the AudioContext and gain nodes
-   * Must be called after a user interaction on iOS Safari
+   * Unlock iOS audio by playing silent audio via HTML5 <audio> element.
+   * This tricks iOS into using "playback" mode instead of "ambient" mode,
+   * allowing audio to play even when the silent/mute switch is ON.
    */
-  async initialize(): Promise<void> {
+  private unlockiOSAudio(): void {
+    // Create audio element (iOS treats <audio> differently than Web Audio)
+    const audio = document.createElement('audio');
+
+    // Tiny silent MP3 data URI
+    audio.src = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+9DEAAAIAANIAAAAgAADSAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//tQxBkAAADSAAAAAAAAANIAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+
+    // Required attributes for iOS
+    audio.setAttribute('playsinline', 'true');
+    audio.setAttribute('webkit-playsinline', 'true');
+
+    // Play silently to unlock "playback" mode
+    audio.volume = 0.001;
+    audio.play().catch(() => {
+      // Ignore errors - this is a best-effort unlock
+    });
+  }
+
+  /**
+   * Initialize the AudioContext and gain nodes
+   * Must be called SYNCHRONOUSLY during a user gesture on iOS
+   */
+  initialize(): void {
     if (this._isInitialized) return;
+
+    // Unlock iOS audio first (switches to "playback" mode for silent switch bypass)
+    this.unlockiOSAudio();
 
     // Create AudioContext (with webkit prefix for older iOS Safari)
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     this.audioContext = new AudioContextClass();
 
-    // CRITICAL: Resume AudioContext immediately (iOS Safari starts suspended)
-    // This must happen during the user gesture that called initialize()
+    // Resume AudioContext synchronously (must stay in user gesture context)
     if (this.audioContext.state === 'suspended') {
-      await this.audioContext.resume();
+      this.audioContext.resume();  // No await - must be synchronous!
     }
 
     // Create gain nodes for independent volume control
@@ -492,9 +517,9 @@ export function useAudioEngine() {
     setState(prev => ({ ...prev, isLoading }));
   }, [isLoading]);
 
-  // Initialize audio context (must be called on user interaction)
-  const initialize = useCallback(async () => {
-    await engineRef.current?.initialize();
+  // Initialize audio context (must be called SYNCHRONOUSLY on user interaction)
+  const initialize = useCallback(() => {
+    engineRef.current?.initialize();
   }, []);
 
   // Load a track
