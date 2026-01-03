@@ -1,5 +1,5 @@
 // src/data/playlists.ts
-// Audio file paths match actual structure in /public/audio/
+// Audio file paths use URL-safe names (lowercase, hyphens, no accents)
 
 import type { Playlist, Track } from '../types';
 
@@ -14,7 +14,7 @@ const playlist1Tracks: Track[] = [
     compases: 2,
     hasMuteableGuitar: false,
     audioFiles: {
-      main: '/audio/playlist-1/Tablao, SxB/Base Soleá por Bulerías x2.wav',
+      main: '/audio/playlist-1/tablao-sxb/base-solea-por-bulerias-x2.wav',
     },
   },
   {
@@ -23,8 +23,8 @@ const playlist1Tracks: Track[] = [
     compases: 5,
     hasMuteableGuitar: true,
     audioFiles: {
-      main: '/audio/playlist-1/Tablao, SxB/Salida SxB/Salida Cante Soleá por Bulería.wav',
-      guitar: '/audio/playlist-1/Tablao, SxB/Salida SxB/Salida Cante Soleá por Bulería, Solo Guitarra.wav',
+      main: '/audio/playlist-1/tablao-sxb/salida-sxb/salida-cante-solea-por-buleria.wav',
+      guitar: '/audio/playlist-1/tablao-sxb/salida-sxb/salida-cante-solea-por-buleria-solo-guitarra.wav',
     },
   },
   {
@@ -33,7 +33,7 @@ const playlist1Tracks: Track[] = [
     compases: 1,
     hasMuteableGuitar: false,
     audioFiles: {
-      main: '/audio/playlist-1/Tablao, SxB/Base Soleá por Bulerías.wav',
+      main: '/audio/playlist-1/tablao-sxb/base-solea-por-bulerias.wav',
     },
   },
   {
@@ -42,8 +42,8 @@ const playlist1Tracks: Track[] = [
     compases: 7,
     hasMuteableGuitar: true,
     audioFiles: {
-      main: '/audio/playlist-1/Tablao, SxB/Dios te había dado sabiduría/Dios te había dado.wav',
-      guitar: '/audio/playlist-1/Tablao, SxB/Dios te había dado sabiduría/Dios te había dado, Solo Guitarra.wav',
+      main: '/audio/playlist-1/tablao-sxb/dios-te-habia-dado-sabiduria/dios-te-habia-dado.wav',
+      guitar: '/audio/playlist-1/tablao-sxb/dios-te-habia-dado-sabiduria/dios-te-habia-dado-solo-guitarra.wav',
     },
   },
   {
@@ -52,7 +52,7 @@ const playlist1Tracks: Track[] = [
     compases: 3,
     hasMuteableGuitar: false,
     audioFiles: {
-      main: '/audio/playlist-1/Tablao, SxB/Falseta 1.wav',
+      main: '/audio/playlist-1/tablao-sxb/falseta-1.wav',
     },
   },
   {
@@ -61,8 +61,8 @@ const playlist1Tracks: Track[] = [
     compases: 12,
     hasMuteableGuitar: true,
     audioFiles: {
-      main: '/audio/playlist-1/Tablao, SxB/Cuando tú me eches de menos/Cuando tú.wav',
-      guitar: '/audio/playlist-1/Tablao, SxB/Cuando tú me eches de menos/Cuando tú, Solo Guitarra.wav',
+      main: '/audio/playlist-1/tablao-sxb/cuando-tu-me-eches-de-menos/cuando-tu.wav',
+      guitar: '/audio/playlist-1/tablao-sxb/cuando-tu-me-eches-de-menos/cuando-tu-solo-guitarra.wav',
     },
   },
   {
@@ -71,7 +71,7 @@ const playlist1Tracks: Track[] = [
     compases: 1,
     hasMuteableGuitar: false,
     audioFiles: {
-      main: '/audio/playlist-1/Tablao, SxB/Base Soleá por Bulerías.wav',
+      main: '/audio/playlist-1/tablao-sxb/base-solea-por-bulerias.wav',
     },
   },
   {
@@ -80,8 +80,8 @@ const playlist1Tracks: Track[] = [
     compases: 6,
     hasMuteableGuitar: true,
     audioFiles: {
-      main: '/audio/playlist-1/Tablao, SxB/A pasar Fatiga/A pasar Fatiga.wav',
-      guitar: '/audio/playlist-1/Tablao, SxB/A pasar Fatiga/A pasar Fatiga, Solo Guitarra.wav',
+      main: '/audio/playlist-1/tablao-sxb/a-pasar-fatiga/a-pasar-fatiga.wav',
+      guitar: '/audio/playlist-1/tablao-sxb/a-pasar-fatiga/a-pasar-fatiga-solo-guitarra.wav',
     },
   },
   {
@@ -90,7 +90,7 @@ const playlist1Tracks: Track[] = [
     compases: 1,
     hasMuteableGuitar: false,
     audioFiles: {
-      main: '/audio/playlist-1/Tablao, SxB/Cierre Final Guitarra.wav',
+      main: '/audio/playlist-1/tablao-sxb/cierre-final-guitarra.wav',
     },
   },
 ];
@@ -106,7 +106,7 @@ const playlist2Tracks: Track[] = [
     compases: 2,
     hasMuteableGuitar: false,
     audioFiles: {
-      main: '/audio/playlist-2/Fiesta, Bulerías/Base por Bulerías x2.wav',
+      main: '/audio/playlist-2/fiesta-bulerias/base-por-bulerias-x2.wav',
     },
   },
   {
@@ -115,8 +115,8 @@ const playlist2Tracks: Track[] = [
     compases: 24,
     hasMuteableGuitar: true,
     audioFiles: {
-      main: '/audio/playlist-2/Fiesta, Bulerías/Aguilas que vais Volando/Aguilas que vais volando, Cante y Percu.wav',
-      guitar: '/audio/playlist-2/Fiesta, Bulerías/Aguilas que vais Volando/Aguilas que vais volando, Solo Guitarra.wav',
+      main: '/audio/playlist-2/fiesta-bulerias/aguilas-que-vais-volando/aguilas-que-vais-volando-cante-y-percu.wav',
+      guitar: '/audio/playlist-2/fiesta-bulerias/aguilas-que-vais-volando/aguilas-que-vais-volando-solo-guitarra.wav',
     },
   },
   {
@@ -125,7 +125,7 @@ const playlist2Tracks: Track[] = [
     compases: 1,
     hasMuteableGuitar: false,
     audioFiles: {
-      main: '/audio/playlist-2/Fiesta, Bulerías/Base por Bulerías.wav',
+      main: '/audio/playlist-2/fiesta-bulerias/base-por-bulerias.wav',
     },
   },
   {
@@ -134,8 +134,8 @@ const playlist2Tracks: Track[] = [
     compases: 17,
     hasMuteableGuitar: true,
     audioFiles: {
-      main: '/audio/playlist-2/Fiesta, Bulerías/Tiro piedras por la calle/Tiro piedras por la calle, Cante y Percu.wav',
-      guitar: '/audio/playlist-2/Fiesta, Bulerías/Tiro piedras por la calle/Tiro piedras por la calle, Solo Guitarra.wav',
+      main: '/audio/playlist-2/fiesta-bulerias/tiro-piedras-por-la-calle/tiro-piedras-por-la-calle-cante-y-percu.wav',
+      guitar: '/audio/playlist-2/fiesta-bulerias/tiro-piedras-por-la-calle/tiro-piedras-por-la-calle-solo-guitarra.wav',
     },
   },
   {
@@ -144,7 +144,7 @@ const playlist2Tracks: Track[] = [
     compases: 1,
     hasMuteableGuitar: false,
     audioFiles: {
-      main: '/audio/playlist-2/Fiesta, Bulerías/Cierre Guitarra Bulerías.wav',
+      main: '/audio/playlist-2/fiesta-bulerias/cierre-guitarra-bulerias.wav',
     },
   },
 ];
