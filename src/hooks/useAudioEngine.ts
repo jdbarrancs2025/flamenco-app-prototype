@@ -76,6 +76,12 @@ class AudioEngine {
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
     this.audioContext = new AudioContextClass();
 
+    // CRITICAL: Resume AudioContext immediately (iOS Safari starts suspended)
+    // This must happen during the user gesture that called initialize()
+    if (this.audioContext.state === 'suspended') {
+      await this.audioContext.resume();
+    }
+
     // Create gain nodes for independent volume control
     this.mainGainNode = this.audioContext.createGain();
     this.guitarGainNode = this.audioContext.createGain();
@@ -84,7 +90,7 @@ class AudioEngine {
     this.mainGainNode.connect(this.audioContext.destination);
     this.guitarGainNode.connect(this.audioContext.destination);
 
-    // Setup iOS Safari handling
+    // Setup iOS Safari handling for future interactions
     this.setupiOSHandling();
 
     this._isInitialized = true;
