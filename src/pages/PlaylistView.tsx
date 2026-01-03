@@ -15,21 +15,27 @@ export function PlaylistView() {
   const playlist = playlistId ? getPlaylistById(playlistId) : undefined;
 
   // Player state (visual only for Milestone 1)
+  const [prevPlaylistId, setPrevPlaylistId] = useState<string | undefined>(
+    undefined
+  );
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const [mutedTrackIds, setMutedTrackIds] = useState<Set<string>>(new Set());
-  const [tracks, setTracks] = useState<Track[]>([]);
+  const [tracks, setTracks] = useState<Track[]>(() =>
+    playlist?.tracks ? [...playlist.tracks] : []
+  );
 
-  // Initialize tracks when playlist changes
-  useEffect(() => {
+  // Reset state when playlist changes (React-recommended pattern)
+  if (playlistId !== prevPlaylistId) {
+    setPrevPlaylistId(playlistId);
     if (playlist) {
       setTracks([...playlist.tracks]);
       setCurrentTrackIndex(0);
       setMutedTrackIds(new Set());
     }
-  }, [playlist]);
+  }
 
   // Redirect if playlist not found
   useEffect(() => {

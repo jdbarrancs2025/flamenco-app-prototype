@@ -1,10 +1,8 @@
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Headphones, Search, BookOpen, Sparkles, Plus } from 'lucide-react';
 
 export function TabBar() {
   const navigate = useNavigate();
-  const location = useLocation();
-  const isHome = location.pathname === '/';
 
   return (
     <>
