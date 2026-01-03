@@ -255,8 +255,15 @@ class AudioEngine {
 
     // START BOTH AT EXACT SAME TIME - This is the key to synchronization!
     const startAt = this.audioContext.currentTime;
-    this.mainSource.start(startAt, this.startOffset);
-    this.guitarSource?.start(startAt, this.startOffset);
+    try {
+      this.mainSource.start(startAt, this.startOffset);
+      this.guitarSource?.start(startAt, this.startOffset);
+    } catch (e) {
+      // Safety net: if start fails (e.g., race condition), don't crash the app
+      console.warn('Audio start failed (likely race condition):', e);
+      this._isPlaying = false;
+      return;
+    }
 
     this._isPlaying = true;
     this.startTime = startAt;

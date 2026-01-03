@@ -38,6 +38,7 @@ export function PlaylistView() {
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const [mutedTrackIds, setMutedTrackIds] = useState<Set<string>>(new Set());
   const mutedTrackIdsRef = useRef(mutedTrackIds);
+  const isLoadingTrackRef = useRef(false);  // Prevent concurrent track loads
   const [tracks, setTracks] = useState<Track[]>(() =>
     playlist?.tracks ? [...playlist.tracks] : []
   );
@@ -84,11 +85,16 @@ export function PlaylistView() {
 
       if (isLooping) {
         // Replay current track - load it again to reset position
+        if (isLoadingTrackRef.current) return;  // Prevent concurrent loads
         const track = tracks[currentTrackIndex];
         if (track) {
+          isLoadingTrackRef.current = true;
           loadTrack(track).then(() => {
             setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
+            isLoadingTrackRef.current = false;
             // Auto-play effect will call play() when loading completes
+          }).catch(() => {
+            isLoadingTrackRef.current = false;
           });
         }
       } else {
@@ -102,8 +108,8 @@ export function PlaylistView() {
   // Auto-play when track changes (if was playing)
   useEffect(() => {
     if (wasPlayingRef.current && !audioState.isLoading && audioState.duration > 0) {
+      wasPlayingRef.current = false;  // Reset FIRST to prevent double-call in race conditions
       play();
-      wasPlayingRef.current = false;
     }
   }, [audioState.isLoading, audioState.duration, play]);
 
