@@ -18,6 +18,7 @@ export function PlaylistView() {
   // Audio engine hook
   const {
     state: audioState,
+    initialize,
     loadTrack,
     play,
     pause,
@@ -104,10 +105,12 @@ export function PlaylistView() {
   const canMuteGuitar = currentTrack?.hasMuteableGuitar ?? false;
   const isGuitarMuted = currentTrack ? mutedTrackIds.has(currentTrack.id) : false;
 
-  const handlePlayPause = () => {
+  const handlePlayPause = async () => {
     if (audioState.isPlaying) {
       pause();
     } else {
+      // Initialize AudioContext on user gesture (iOS Safari requirement)
+      await initialize();
       play();
     }
   };
