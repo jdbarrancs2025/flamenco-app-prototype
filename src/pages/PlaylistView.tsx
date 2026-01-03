@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Header } from '../components/layout/Header';
 import { Pills } from '../components/layout/Pills';
 import { TabBar } from '../components/layout/TabBar';
@@ -7,6 +7,7 @@ import { SpeedSlider } from '../components/player/SpeedSlider';
 import { PlayerControls } from '../components/player/PlayerControls';
 import { TrackList } from '../components/player/TrackList';
 import { getPlaylistById } from '../data/playlists';
+import { useAudioEngine } from '../hooks/useAudioEngine';
 import type { Track } from '../types';
 
 export function PlaylistView() {
@@ -14,13 +15,25 @@ export function PlaylistView() {
   const navigate = useNavigate();
   const playlist = playlistId ? getPlaylistById(playlistId) : undefined;
 
-  // Player state (visual only for Milestone 1)
+  // Audio engine hook
+  const {
+    state: audioState,
+    loadTrack,
+    play,
+    pause,
+    stop,
+    setPlaybackRate: setEnginePlaybackRate,
+    setGuitarMuted,
+    onTrackEnd,
+  } = useAudioEngine();
+
+  // Player state
   const [prevPlaylistId, setPrevPlaylistId] = useState<string | undefined>(
     undefined
   );
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [isLooping, setIsLooping] = useState(false);
+  const wasPlayingRef = useRef(false);
   const [playbackRate, setPlaybackRate] = useState(1.0);
   const [mutedTrackIds, setMutedTrackIds] = useState<Set<string>>(new Set());
   const [tracks, setTracks] = useState<Track[]>(() =>
@@ -30,6 +43,7 @@ export function PlaylistView() {
   // Reset state when playlist changes (React-recommended pattern)
   if (playlistId !== prevPlaylistId) {
     setPrevPlaylistId(playlistId);
+    stop();
     if (playlist) {
       setTracks([...playlist.tracks]);
       setCurrentTrackIndex(0);
@@ -44,6 +58,44 @@ export function PlaylistView() {
     }
   }, [playlistId, playlist, navigate]);
 
+  // Load track when selection changes
+  useEffect(() => {
+    const track = tracks[currentTrackIndex];
+    if (track) {
+      loadTrack(track).then(() => {
+        setGuitarMuted(mutedTrackIds.has(track.id));
+      });
+    }
+  }, [currentTrackIndex, tracks, loadTrack, setGuitarMuted, mutedTrackIds]);
+
+  // Auto-advance on track end
+  useEffect(() => {
+    onTrackEnd(() => {
+      if (isLooping) {
+        // Replay current track
+        const track = tracks[currentTrackIndex];
+        if (track) {
+          loadTrack(track).then(() => {
+            setGuitarMuted(mutedTrackIds.has(track.id));
+            play();
+          });
+        }
+      } else {
+        // Advance to next (or loop playlist)
+        const nextIndex = (currentTrackIndex + 1) % tracks.length;
+        setCurrentTrackIndex(nextIndex);
+      }
+    });
+  }, [currentTrackIndex, isLooping, tracks, mutedTrackIds, onTrackEnd, loadTrack, setGuitarMuted, play]);
+
+  // Auto-play when track changes (if was playing)
+  useEffect(() => {
+    if (wasPlayingRef.current && !audioState.isLoading && audioState.duration > 0) {
+      play();
+      wasPlayingRef.current = false;
+    }
+  }, [audioState.isLoading, audioState.duration, play]);
+
   if (!playlist) {
     return null;
   }
@@ -53,7 +105,11 @@ export function PlaylistView() {
   const isGuitarMuted = currentTrack ? mutedTrackIds.has(currentTrack.id) : false;
 
   const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
+    if (audioState.isPlaying) {
+      pause();
+    } else {
+      play();
+    }
   };
 
   const handleToggleLoop = () => {
@@ -66,11 +122,19 @@ export function PlaylistView() {
 
     setMutedTrackIds((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
+      const newMuted = !next.has(id);
+
+      if (newMuted) {
         next.add(id);
+      } else {
+        next.delete(id);
       }
+
+      // Apply to audio engine if this is the current track
+      if (id === currentTrack?.id) {
+        setGuitarMuted(newMuted);
+      }
+
       return next;
     });
   };
@@ -88,7 +152,14 @@ export function PlaylistView() {
   };
 
   const handleSelectTrack = (index: number) => {
+    wasPlayingRef.current = audioState.isPlaying;
+    stop();
     setCurrentTrackIndex(index);
+  };
+
+  const handleSpeedChange = (rate: number) => {
+    setPlaybackRate(rate);           // Local state for UI
+    setEnginePlaybackRate(rate);     // Audio engine
   };
 
   return (
@@ -98,12 +169,12 @@ export function PlaylistView() {
 
       {/* Speed Slider - 52px below pills (164px - 112px in Figma) */}
       <div style={{ marginTop: '20px' }}>
-        <SpeedSlider value={playbackRate} onChange={setPlaybackRate} />
+        <SpeedSlider value={playbackRate} onChange={handleSpeedChange} />
       </div>
 
       {/* Player Controls */}
       <PlayerControls
-        isPlaying={isPlaying}
+        isPlaying={audioState.isPlaying}
         isLooping={isLooping}
         isGuitarMuted={isGuitarMuted}
         canMuteGuitar={canMuteGuitar}
