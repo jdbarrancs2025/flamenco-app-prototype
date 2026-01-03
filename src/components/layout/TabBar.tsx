@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { Headphones, Search, BookOpen, Sparkles, Plus } from 'lucide-react';
+import { Headphones, Search, BookOpen, Plus } from 'lucide-react';
 
 export function TabBar() {
   const navigate = useNavigate();
@@ -15,9 +15,9 @@ export function TabBar() {
         style={{ boxShadow: '0px -0.5px 0px rgba(0, 0, 0, 0.1)' }}
       >
         <div className="flex justify-around items-center h-[49px] px-4">
-          {/* Sparkles - Decorative */}
+          {/* Cajon - Decorative */}
           <button className="w-12 h-12 flex items-center justify-center opacity-40 cursor-default" disabled>
-            <Sparkles size={24} className="text-black" />
+            <img src="/icons/cajon.png" alt="" width={24} height={24} />
           </button>
 
           {/* Search - Decorative */}
