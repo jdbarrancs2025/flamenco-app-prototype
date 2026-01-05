@@ -187,6 +187,12 @@ class AudioEngine {
    * For mutable tracks, loads both main and guitar files
    */
   async loadTrack(track: Track): Promise<void> {
+    console.log('[AudioEngine.loadTrack] Called', {
+      trackId: track.id,
+      wasPlaying: this._isPlaying,
+      currentTrackId: this.currentTrackId,
+    });
+
     if (!this.audioContext) {
       throw new Error('AudioContext not initialized');
     }

@@ -85,13 +85,15 @@ export function PlaylistView() {
   // Load track when selection changes (NOT when mute state changes!)
   useEffect(() => {
     const track = tracks[currentTrackIndex];
-    if (track) {
+    // Only load if track is different from what's already loaded
+    // This prevents re-loading during playback if tracks array reference changes
+    if (track && audioState.currentTrackId !== track.id) {
       loadTrack(track).then(() => {
         // Use ref to get current mute state without adding to deps
         setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
       });
     }
-  }, [currentTrackIndex, tracks, loadTrack, setGuitarMuted]);
+  }, [currentTrackIndex, tracks, audioState.currentTrackId, loadTrack, setGuitarMuted]);
 
   // Auto-advance on track end - register callback ONCE with stable refs
   useEffect(() => {
