@@ -206,17 +206,50 @@ class AudioEngine {
     this.startOffset = 0;
     this.currentTrackId = track.id;
 
-    // Load main audio (always required)
-    this.mainBuffer = await this.loadBuffer(track.audioFiles.main);
-
-    // Load guitar audio (only for mutable tracks)
+    // Load audio files - parallel for dual-track files, single for others
     if (track.hasMuteableGuitar && track.audioFiles.guitar) {
-      this.guitarBuffer = await this.loadBuffer(track.audioFiles.guitar);
+      // Parallel loading for dual-track files (~50% faster)
+      const [mainBuffer, guitarBuffer] = await Promise.all([
+        this.loadBuffer(track.audioFiles.main),
+        this.loadBuffer(track.audioFiles.guitar),
+      ]);
+      this.mainBuffer = mainBuffer;
+      this.guitarBuffer = guitarBuffer;
     } else {
+      // Single file loading
+      this.mainBuffer = await this.loadBuffer(track.audioFiles.main);
       this.guitarBuffer = null;
     }
 
     this.notifyStateChange();
+  }
+
+  /**
+   * Prefetch a track's audio files into cache without setting as current
+   * Used for preloading upcoming tracks during playback
+   */
+  async prefetchTrack(track: Track): Promise<void> {
+    if (!this.audioContext) return;
+
+    // Skip if already cached
+    const mainCached = this.bufferCache.has(track.audioFiles.main);
+    const guitarCached = !track.audioFiles.guitar || this.bufferCache.has(track.audioFiles.guitar);
+
+    if (mainCached && guitarCached) return;
+
+    const promises: Promise<AudioBuffer>[] = [];
+
+    if (!mainCached) {
+      promises.push(this.loadBuffer(track.audioFiles.main));
+    }
+
+    if (track.hasMuteableGuitar && track.audioFiles.guitar && !guitarCached) {
+      promises.push(this.loadBuffer(track.audioFiles.guitar));
+    }
+
+    if (promises.length > 0) {
+      await Promise.all(promises);
+    }
   }
 
   /**
@@ -591,6 +624,16 @@ export function useAudioEngine() {
     }
   }, []);
 
+  // Prefetch a track (for preloading upcoming tracks)
+  const prefetchTrack = useCallback(async (track: Track) => {
+    if (!engineRef.current) return;
+    // Initialize if not already (needed for AudioContext)
+    if (!engineRef.current.getIsInitialized()) {
+      engineRef.current.initialize();
+    }
+    await engineRef.current.prefetchTrack(track);
+  }, []);
+
   // Play
   const play = useCallback(() => {
     engineRef.current?.play();
@@ -630,6 +673,7 @@ export function useAudioEngine() {
     state,
     initialize,
     loadTrack,
+    prefetchTrack,
     play,
     pause,
     stop,

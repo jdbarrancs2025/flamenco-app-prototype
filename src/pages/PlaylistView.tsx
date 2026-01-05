@@ -20,6 +20,7 @@ export function PlaylistView() {
     state: audioState,
     initialize,
     loadTrack,
+    prefetchTrack,
     play,
     pause,
     stop,
@@ -160,6 +161,19 @@ export function PlaylistView() {
       play();
     }
   }, [audioState.isLoading, audioState.duration, audioState.isPlaying, audioState.currentTrackId, currentTrackIndex, tracks, play]);
+
+  // Prefetch next track when playback starts (for faster transitions)
+  useEffect(() => {
+    if (audioState.isPlaying && tracks.length > 1) {
+      const nextIndex = (currentTrackIndex + 1) % tracks.length;
+      const nextTrack = tracks[nextIndex];
+
+      // Prefetch in background (don't await, ignore errors)
+      prefetchTrack(nextTrack).catch(() => {
+        // Ignore prefetch errors - it's just an optimization
+      });
+    }
+  }, [audioState.isPlaying, currentTrackIndex, tracks, prefetchTrack]);
 
   if (!playlist) {
     return null;
