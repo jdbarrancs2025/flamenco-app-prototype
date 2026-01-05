@@ -41,10 +41,10 @@ export function PlaylistView() {
   const isLoadingTrackRef = useRef(false);  // Prevent concurrent track loads
   const currentTrackIndexRef = useRef(currentTrackIndex);
   const isLoopingRef = useRef(isLooping);
-  const tracksRef = useRef(tracks);
   const [tracks, setTracks] = useState<Track[]>(() =>
     playlist?.tracks ? [...playlist.tracks] : []
   );
+  const tracksRef = useRef(tracks);
 
   // Reset state when playlist changes (React-recommended pattern)
   if (playlistId !== prevPlaylistId) {
