@@ -39,6 +39,9 @@ export function PlaylistView() {
   const [mutedTrackIds, setMutedTrackIds] = useState<Set<string>>(new Set());
   const mutedTrackIdsRef = useRef(mutedTrackIds);
   const isLoadingTrackRef = useRef(false);  // Prevent concurrent track loads
+  const currentTrackIndexRef = useRef(currentTrackIndex);
+  const isLoopingRef = useRef(isLooping);
+  const tracksRef = useRef(tracks);
   const [tracks, setTracks] = useState<Track[]>(() =>
     playlist?.tracks ? [...playlist.tracks] : []
   );
@@ -66,6 +69,19 @@ export function PlaylistView() {
     mutedTrackIdsRef.current = mutedTrackIds;
   }, [mutedTrackIds]);
 
+  // Keep other refs in sync for stable onTrackEnd callback
+  useEffect(() => {
+    currentTrackIndexRef.current = currentTrackIndex;
+  }, [currentTrackIndex]);
+
+  useEffect(() => {
+    isLoopingRef.current = isLooping;
+  }, [isLooping]);
+
+  useEffect(() => {
+    tracksRef.current = tracks;
+  }, [tracks]);
+
   // Load track when selection changes (NOT when mute state changes!)
   useEffect(() => {
     const track = tracks[currentTrackIndex];
@@ -77,16 +93,21 @@ export function PlaylistView() {
     }
   }, [currentTrackIndex, tracks, loadTrack, setGuitarMuted]);
 
-  // Auto-advance on track end
+  // Auto-advance on track end - register callback ONCE with stable refs
   useEffect(() => {
     onTrackEnd(() => {
       // Always set wasPlayingRef to trigger auto-play after track loads
       wasPlayingRef.current = true;
 
-      if (isLooping) {
+      // Read FRESH values from refs (not stale closure captures)
+      const currentIndex = currentTrackIndexRef.current;
+      const looping = isLoopingRef.current;
+      const currentTracks = tracksRef.current;
+
+      if (looping) {
         // Replay current track - load it again to reset position
         if (isLoadingTrackRef.current) return;  // Prevent concurrent loads
-        const track = tracks[currentTrackIndex];
+        const track = currentTracks[currentIndex];
         if (track) {
           isLoadingTrackRef.current = true;
           loadTrack(track).then(() => {
@@ -99,11 +120,11 @@ export function PlaylistView() {
         }
       } else {
         // Advance to next (or loop playlist)
-        const nextIndex = (currentTrackIndex + 1) % tracks.length;
+        const nextIndex = (currentIndex + 1) % currentTracks.length;
         setCurrentTrackIndex(nextIndex);
       }
     });
-  }, [currentTrackIndex, isLooping, tracks, onTrackEnd, loadTrack, setGuitarMuted]);
+  }, [onTrackEnd, loadTrack, setGuitarMuted]);  // Only stable function dependencies
 
   // Auto-play when track changes (if was playing)
   useEffect(() => {

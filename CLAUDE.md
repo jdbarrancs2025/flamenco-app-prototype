@@ -130,3 +130,4 @@ src/
 - Shuffle button is **crossed out/disabled** in the design
 - All track deletions are **temporary** - reset on page refresh or playlist change
 - Mute state **persists** during playlist playback (even when looping back)
+- **Always** use model Opus for all agents you launch
