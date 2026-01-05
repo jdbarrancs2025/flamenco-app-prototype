@@ -218,13 +218,33 @@ class AudioEngine {
    * Creates new source nodes and starts them at the exact same time
    */
   play(): void {
-    if (!this.audioContext || !this.mainBuffer) return;
-    if (this._isPlaying) return;
+    console.log('[AudioEngine.play] Called', {
+      hasContext: !!this.audioContext,
+      hasBuffer: !!this.mainBuffer,
+      isPlaying: this._isPlaying,
+      contextState: this.audioContext?.state,
+    });
+
+    if (!this.audioContext || !this.mainBuffer) {
+      console.log('[AudioEngine.play] Early return: missing context or buffer');
+      return;
+    }
+    if (this._isPlaying) {
+      console.log('[AudioEngine.play] Early return: already playing');
+      return;
+    }
 
     // Resume audio context if suspended (iOS Safari)
     if (this.audioContext.state === 'suspended') {
+      console.log('[AudioEngine.play] AudioContext suspended, attempting resume...');
       this.audioContext.resume();
+      // If still suspended after sync resume attempt, we can't auto-play
+      if (this.audioContext.state === 'suspended') {
+        console.warn('[AudioEngine.play] AudioContext still suspended, cannot auto-play');
+        return;
+      }
     }
+    console.log('[AudioEngine.play] AudioContext state:', this.audioContext.state);
 
     // Create new source node for main audio (sources are single-use)
     this.mainSource = this.audioContext.createBufferSource();
@@ -234,13 +254,23 @@ class AudioEngine {
 
     // Handle track end
     this.mainSource.onended = () => {
+      console.log('[AudioEngine.onended] Track ended', {
+        wasPlaying: this._isPlaying,
+        trackId: this.currentTrackId,
+      });
       if (this._isPlaying) {
         this._isPlaying = false;
         this.startOffset = 0;
         this.notifyStateChange();
+        console.log('[AudioEngine.onended] Calling onTrackEndCallback...');
         this.onTrackEndCallback?.();
+      } else {
+        console.log('[AudioEngine.onended] Skipping callback - was not playing');
       }
     };
+
+    // Clear old guitar source (prevents reusing already-started nodes)
+    this.guitarSource = null;
 
     // Create guitar source if track has separate guitar
     if (this.guitarBuffer) {
@@ -258,15 +288,25 @@ class AudioEngine {
     try {
       this.mainSource.start(startAt, this.startOffset);
       this.guitarSource?.start(startAt, this.startOffset);
+      console.log('[AudioEngine.play] Sources started successfully');
     } catch (e) {
       // Safety net: if start fails (e.g., race condition), don't crash the app
-      console.warn('Audio start failed (likely race condition):', e);
+      console.error('[AudioEngine.play] Source start FAILED:', e);
       this._isPlaying = false;
+      return;
+    }
+
+    // Verify AudioContext is actually running
+    if (this.audioContext.state !== 'running') {
+      console.warn('[AudioEngine.play] AudioContext not running after start, state:', this.audioContext.state);
+      this._isPlaying = false;
+      this.notifyStateChange();
       return;
     }
 
     this._isPlaying = true;
     this.startTime = startAt;
+    console.log('[AudioEngine.play] Playback started, _isPlaying =', this._isPlaying);
     this.notifyStateChange();
   }
 

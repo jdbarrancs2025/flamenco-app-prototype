@@ -96,13 +96,19 @@ export function PlaylistView() {
   // Auto-advance on track end - register callback ONCE with stable refs
   useEffect(() => {
     onTrackEnd(() => {
-      // Always set wasPlayingRef to trigger auto-play after track loads
-      wasPlayingRef.current = true;
-
       // Read FRESH values from refs (not stale closure captures)
       const currentIndex = currentTrackIndexRef.current;
       const looping = isLoopingRef.current;
       const currentTracks = tracksRef.current;
+
+      console.log('[PlaylistView.onTrackEnd] Callback fired', {
+        currentIndex,
+        looping,
+        tracksLength: currentTracks.length,
+      });
+
+      // Always set wasPlayingRef to trigger auto-play after track loads
+      wasPlayingRef.current = true;
 
       if (looping) {
         // Replay current track - load it again to reset position
@@ -128,11 +134,30 @@ export function PlaylistView() {
 
   // Auto-play when track changes (if was playing)
   useEffect(() => {
-    if (wasPlayingRef.current && !audioState.isLoading && audioState.duration > 0) {
+    const currentTrack = tracks[currentTrackIndex];
+    console.log('[PlaylistView.autoPlay] Effect check', {
+      wasPlaying: wasPlayingRef.current,
+      isLoading: audioState.isLoading,
+      duration: audioState.duration,
+      isPlaying: audioState.isPlaying,
+      currentTrackId: audioState.currentTrackId,
+      expectedTrackId: currentTrack?.id,
+    });
+
+    // Only auto-play when:
+    // 1. We were playing before
+    // 2. Not currently loading
+    // 3. Track has duration
+    // 4. The LOADED track matches the SELECTED track (prevents playing old buffer)
+    if (wasPlayingRef.current &&
+        !audioState.isLoading &&
+        audioState.duration > 0 &&
+        audioState.currentTrackId === currentTrack?.id) {
+      console.log('[PlaylistView.autoPlay] Triggering play()');
       wasPlayingRef.current = false;  // Reset FIRST to prevent double-call in race conditions
       play();
     }
-  }, [audioState.isLoading, audioState.duration, play]);
+  }, [audioState.isLoading, audioState.duration, audioState.isPlaying, audioState.currentTrackId, currentTrackIndex, tracks, play]);
 
   if (!playlist) {
     return null;
