@@ -225,6 +225,28 @@ export function PlaylistView() {
     setCurrentTrackIndex(index);
   };
 
+  const handleReorderTracks = (oldIndex: number, newIndex: number) => {
+    // Get current track ID before reorder
+    const currentTrackId = tracks[currentTrackIndex]?.id;
+
+    // Reorder tracks array using splice
+    const newTracks = [...tracks];
+    const [removed] = newTracks.splice(oldIndex, 1);
+    newTracks.splice(newIndex, 0, removed);
+    setTracks(newTracks);
+
+    // Update currentTrackIndex to follow the currently playing track
+    if (currentTrackId) {
+      const newCurrentIndex = newTracks.findIndex(t => t.id === currentTrackId);
+      if (newCurrentIndex !== -1 && newCurrentIndex !== currentTrackIndex) {
+        setCurrentTrackIndex(newCurrentIndex);
+      }
+    }
+
+    // Update tracksRef immediately for audio callbacks
+    tracksRef.current = newTracks;
+  };
+
   const handleSpeedChange = (rate: number) => {
     setPlaybackRate(rate);           // Local state for UI
     setEnginePlaybackRate(rate);     // Audio engine
@@ -261,6 +283,7 @@ export function PlaylistView() {
           mutedTrackIds={mutedTrackIds}
           onSelectTrack={handleSelectTrack}
           onToggleMute={handleToggleMute}
+          onReorder={handleReorderTracks}
         />
       </div>
 
