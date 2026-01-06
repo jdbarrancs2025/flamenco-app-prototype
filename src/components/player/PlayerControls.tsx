@@ -54,6 +54,7 @@ interface PlayerControlsProps {
   isLooping?: boolean;
   isGuitarMuted?: boolean;
   canMuteGuitar?: boolean;
+  canDelete?: boolean;
   onPlayPause?: () => void;
   onToggleLoop?: () => void;
   onToggleMute?: () => void;
@@ -65,6 +66,7 @@ export function PlayerControls({
   isLooping = false,
   isGuitarMuted = false,
   canMuteGuitar = false,
+  canDelete = true,
   onPlayPause,
   onToggleLoop,
   onToggleMute,
@@ -74,8 +76,11 @@ export function PlayerControls({
     <div className="flex justify-around items-center px-[30px] h-16">
       {/* Delete */}
       <button
-        className="w-12 h-12 flex items-center justify-center"
+        className={`w-12 h-12 flex items-center justify-center ${
+          !canDelete ? 'opacity-30' : ''
+        }`}
         onClick={onDelete}
+        disabled={!canDelete}
         aria-label="Eliminar pista"
       >
         <Trash2 size={28} className="text-black" />

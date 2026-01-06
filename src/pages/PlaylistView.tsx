@@ -89,10 +89,15 @@ export function PlaylistView() {
     // Only load if track is different from what's already loaded
     // This prevents re-loading during playback if tracks array reference changes
     if (track && audioState.currentTrackId !== track.id) {
-      loadTrack(track).then(() => {
-        // Use ref to get current mute state without adding to deps
-        setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
-      });
+      loadTrack(track)
+        .then(() => {
+          // Use ref to get current mute state without adding to deps
+          setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
+        })
+        .catch((error) => {
+          console.error('[PlaylistView] Failed to load track:', error);
+          // Graceful fallback - don't crash, user can try selecting again
+        });
     }
   }, [currentTrackIndex, tracks, audioState.currentTrackId, loadTrack, setGuitarMuted]);
 
@@ -222,15 +227,46 @@ export function PlaylistView() {
   };
 
   const handleDelete = () => {
+    // Prevent deleting last track
     if (tracks.length <= 1) return;
 
+    // Guard against concurrent track loads
+    if (isLoadingTrackRef.current) return;
+
+    const deletedTrackId = tracks[currentTrackIndex]?.id;
+    const wasPlaying = audioState.isPlaying;
+
+    // Stop playback if currently playing
+    if (wasPlaying) {
+      stop();
+    }
+
+    // Clean up mute state for deleted track
+    if (deletedTrackId && mutedTrackIds.has(deletedTrackId)) {
+      setMutedTrackIds(prev => {
+        const next = new Set(prev);
+        next.delete(deletedTrackId);
+        return next;
+      });
+    }
+
+    // Remove track from list
     const newTracks = tracks.filter((_, index) => index !== currentTrackIndex);
+
+    // Update ref BEFORE state (prevents stale reads in callbacks)
+    tracksRef.current = newTracks;
     setTracks(newTracks);
 
-    // Adjust current track index
+    // Calculate new index
+    let newIndex = currentTrackIndex;
     if (currentTrackIndex >= newTracks.length) {
-      setCurrentTrackIndex(Math.max(0, newTracks.length - 1));
+      newIndex = Math.max(0, newTracks.length - 1);
     }
+
+    // Do NOT auto-play after deletion - just load the next track
+    wasPlayingRef.current = false;
+
+    setCurrentTrackIndex(newIndex);
   };
 
   const handleSelectTrack = (index: number) => {
@@ -282,6 +318,7 @@ export function PlaylistView() {
         isLooping={isLooping}
         isGuitarMuted={isGuitarMuted}
         canMuteGuitar={canMuteGuitar}
+        canDelete={tracks.length > 1}
         onPlayPause={handlePlayPause}
         onToggleLoop={handleToggleLoop}
         onToggleMute={() => handleToggleMute()}
