@@ -61,6 +61,10 @@ class AudioEngine {
   private guitarMuted = false;
   private currentTrackId: string | null = null;
 
+  // Load versioning (to ignore stale async completions)
+  private loadVersion = 0;
+  private loadAbortController: AbortController | null = null;
+
   // Callbacks
   private onTrackEndCallback: (() => void) | null = null;
   private onStateChangeCallback: (() => void) | null = null;
@@ -155,8 +159,9 @@ class AudioEngine {
   /**
    * Load and decode an audio file into a buffer
    * Uses caching to avoid re-fetching the same file
+   * Supports AbortController for cancellation
    */
-  private async loadBuffer(url: string): Promise<AudioBuffer> {
+  private async loadBuffer(url: string, signal?: AbortSignal): Promise<AudioBuffer> {
     // Check cache first
     if (this.bufferCache.has(url)) {
       return this.bufferCache.get(url)!;
@@ -166,8 +171,8 @@ class AudioEngine {
       throw new Error('AudioContext not initialized');
     }
 
-    // Fetch the audio file
-    const response = await fetch(url);
+    // Fetch the audio file with abort signal
+    const response = await fetch(url, { signal });
     if (!response.ok) {
       throw new Error(`Failed to fetch audio: ${url}`);
     }
@@ -185,19 +190,31 @@ class AudioEngine {
   /**
    * Load a track's audio files into buffers
    * For mutable tracks, loads both main and guitar files
+   * Uses versioning and AbortController to handle race conditions
    */
   async loadTrack(track: Track): Promise<void> {
+    // Increment version to invalidate any in-flight loads
+    const thisLoadVersion = ++this.loadVersion;
+
     console.log('[AudioEngine.loadTrack] Called', {
       trackId: track.id,
       wasPlaying: this._isPlaying,
       currentTrackId: this.currentTrackId,
+      loadVersion: thisLoadVersion,
     });
 
     if (!this.audioContext) {
       throw new Error('AudioContext not initialized');
     }
 
-    // Stop any current playback
+    // Abort any pending fetch requests from previous loads
+    if (this.loadAbortController) {
+      this.loadAbortController.abort();
+    }
+    this.loadAbortController = new AbortController();
+    const signal = this.loadAbortController.signal;
+
+    // Stop any current playback (sets _isPlaying = false FIRST to prevent onended callback)
     if (this._isPlaying) {
       this.stop();
     }
@@ -206,22 +223,50 @@ class AudioEngine {
     this.startOffset = 0;
     this.currentTrackId = track.id;
 
-    // Load audio files - parallel for dual-track files, single for others
-    if (track.hasMuteableGuitar && track.audioFiles.guitar) {
-      // Parallel loading for dual-track files (~50% faster)
-      const [mainBuffer, guitarBuffer] = await Promise.all([
-        this.loadBuffer(track.audioFiles.main),
-        this.loadBuffer(track.audioFiles.guitar),
-      ]);
+    try {
+      // Load audio files - parallel for dual-track files, single for others
+      let mainBuffer: AudioBuffer;
+      let guitarBuffer: AudioBuffer | null = null;
+
+      if (track.hasMuteableGuitar && track.audioFiles.guitar) {
+        // Parallel loading for dual-track files (~50% faster)
+        const [main, guitar] = await Promise.all([
+          this.loadBuffer(track.audioFiles.main, signal),
+          this.loadBuffer(track.audioFiles.guitar, signal),
+        ]);
+        mainBuffer = main;
+        guitarBuffer = guitar;
+      } else {
+        // Single file loading
+        mainBuffer = await this.loadBuffer(track.audioFiles.main, signal);
+      }
+
+      // Check if this load is still current (another loadTrack may have been called)
+      if (thisLoadVersion !== this.loadVersion) {
+        console.log('[AudioEngine.loadTrack] Stale load ignored', {
+          trackId: track.id,
+          thisVersion: thisLoadVersion,
+          currentVersion: this.loadVersion,
+        });
+        return;
+      }
+
+      // Apply the loaded buffers
       this.mainBuffer = mainBuffer;
       this.guitarBuffer = guitarBuffer;
-    } else {
-      // Single file loading
-      this.mainBuffer = await this.loadBuffer(track.audioFiles.main);
-      this.guitarBuffer = null;
-    }
+      this.notifyStateChange();
 
-    this.notifyStateChange();
+    } catch (error) {
+      // Handle abort gracefully
+      if (error instanceof Error && error.name === 'AbortError') {
+        console.log('[AudioEngine.loadTrack] Load aborted - new track selected', {
+          trackId: track.id,
+        });
+        return;
+      }
+      // Re-throw other errors
+      throw error;
+    }
   }
 
   /**
@@ -351,6 +396,7 @@ class AudioEngine {
 
   /**
    * Pause playback and save current position
+   * Sets _isPlaying = false BEFORE stopping to prevent onended callback from firing
    */
   pause(): void {
     if (!this._isPlaying || !this.audioContext) return;
@@ -358,6 +404,18 @@ class AudioEngine {
     // Calculate current position before stopping
     const elapsed = (this.audioContext.currentTime - this.startTime) * this._playbackRate;
     this.startOffset = Math.min(this.startOffset + elapsed, this.getDuration());
+
+    // CRITICAL: Set _isPlaying = false BEFORE stopping sources
+    // This prevents the onended callback from triggering auto-advance
+    this._isPlaying = false;
+
+    // Clear onended handlers to prevent spurious callbacks during intentional stop
+    if (this.mainSource) {
+      this.mainSource.onended = null;
+    }
+    if (this.guitarSource) {
+      this.guitarSource.onended = null;
+    }
 
     // Stop sources (they cannot be restarted, must create new ones)
     try {
@@ -367,7 +425,6 @@ class AudioEngine {
       // Ignore errors if already stopped
     }
 
-    this._isPlaying = false;
     this.notifyStateChange();
   }
 
@@ -388,13 +445,23 @@ class AudioEngine {
 
     // Stop current playback
     if (wasPlaying) {
+      // CRITICAL: Set _isPlaying = false BEFORE stopping
+      this._isPlaying = false;
+
+      // Clear onended handlers to prevent spurious callbacks
+      if (this.mainSource) {
+        this.mainSource.onended = null;
+      }
+      if (this.guitarSource) {
+        this.guitarSource.onended = null;
+      }
+
       try {
         this.mainSource?.stop();
         this.guitarSource?.stop();
       } catch {
         // Ignore errors if already stopped
       }
-      this._isPlaying = false;
     }
 
     // Update position
@@ -519,6 +586,12 @@ class AudioEngine {
    * Clean up resources
    */
   destroy(): void {
+    // Abort any pending loads
+    if (this.loadAbortController) {
+      this.loadAbortController.abort();
+      this.loadAbortController = null;
+    }
+
     this.stop();
 
     // Disconnect gain nodes
