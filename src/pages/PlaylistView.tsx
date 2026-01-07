@@ -37,8 +37,8 @@ export function PlaylistView() {
   const [isLooping, setIsLooping] = useState(false);
   const wasPlayingRef = useRef(false);
   const [playbackRate, setPlaybackRate] = useState(1.0);
-  const [mutedTrackIds, setMutedTrackIds] = useState<Set<string>>(new Set());
-  const mutedTrackIdsRef = useRef(mutedTrackIds);
+  const [isGuitarMutedState, setIsGuitarMutedState] = useState(false);
+  const isGuitarMutedRef = useRef(isGuitarMutedState);
   const isLoadingTrackRef = useRef(false);  // Prevent concurrent track loads
   const currentTrackIndexRef = useRef(currentTrackIndex);
   const isLoopingRef = useRef(isLooping);
@@ -54,7 +54,7 @@ export function PlaylistView() {
     if (playlist) {
       setTracks([...playlist.tracks]);
       setCurrentTrackIndex(0);
-      setMutedTrackIds(new Set());
+      setIsGuitarMutedState(false);
     }
   }
 
@@ -65,10 +65,10 @@ export function PlaylistView() {
     }
   }, [playlistId, playlist, navigate]);
 
-  // Keep mutedTrackIds ref in sync (avoids triggering track reload on mute toggle)
+  // Keep isGuitarMuted ref in sync (avoids triggering track reload on mute toggle)
   useEffect(() => {
-    mutedTrackIdsRef.current = mutedTrackIds;
-  }, [mutedTrackIds]);
+    isGuitarMutedRef.current = isGuitarMutedState;
+  }, [isGuitarMutedState]);
 
   // Keep other refs in sync for stable onTrackEnd callback
   useEffect(() => {
@@ -91,8 +91,8 @@ export function PlaylistView() {
     if (track && audioState.currentTrackId !== track.id) {
       loadTrack(track)
         .then(() => {
-          // Use ref to get current mute state without adding to deps
-          setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
+          // Use ref to get current GLOBAL mute state (persists across tracks)
+          setGuitarMuted(isGuitarMutedRef.current);
         })
         .catch((error) => {
           console.error('[PlaylistView] Failed to load track:', error);
@@ -125,7 +125,8 @@ export function PlaylistView() {
         if (track) {
           isLoadingTrackRef.current = true;
           loadTrack(track).then(() => {
-            setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
+            // Use GLOBAL mute state (persists across tracks and loops)
+            setGuitarMuted(isGuitarMutedRef.current);
             isLoadingTrackRef.current = false;
             // Auto-play effect will call play() when loading completes
           }).catch(() => {
@@ -186,7 +187,7 @@ export function PlaylistView() {
 
   const currentTrack = tracks[currentTrackIndex];
   const canMuteGuitar = currentTrack?.hasMuteableGuitar ?? false;
-  const isGuitarMuted = currentTrack ? mutedTrackIds.has(currentTrack.id) : false;
+  const isGuitarMuted = isGuitarMutedState;
 
   const handlePlayPause = () => {
     if (audioState.isPlaying) {
@@ -203,27 +204,10 @@ export function PlaylistView() {
     setIsLooping(!isLooping);
   };
 
-  const handleToggleMute = (trackId?: string) => {
-    const id = trackId ?? currentTrack?.id;
-    if (!id) return;
-
-    setMutedTrackIds((prev) => {
-      const next = new Set(prev);
-      const newMuted = !next.has(id);
-
-      if (newMuted) {
-        next.add(id);
-      } else {
-        next.delete(id);
-      }
-
-      // Apply to audio engine if this is the current track
-      if (id === currentTrack?.id) {
-        setGuitarMuted(newMuted);
-      }
-
-      return next;
-    });
+  const handleToggleMute = () => {
+    const newMuted = !isGuitarMutedState;
+    setIsGuitarMutedState(newMuted);
+    setGuitarMuted(newMuted);
   };
 
   const handleDelete = () => {
@@ -233,21 +217,11 @@ export function PlaylistView() {
     // Guard against concurrent track loads
     if (isLoadingTrackRef.current) return;
 
-    const deletedTrackId = tracks[currentTrackIndex]?.id;
     const wasPlaying = audioState.isPlaying;
 
     // Stop playback if currently playing
     if (wasPlaying) {
       stop();
-    }
-
-    // Clean up mute state for deleted track
-    if (deletedTrackId && mutedTrackIds.has(deletedTrackId)) {
-      setMutedTrackIds(prev => {
-        const next = new Set(prev);
-        next.delete(deletedTrackId);
-        return next;
-      });
     }
 
     // Remove track from list
@@ -331,7 +305,7 @@ export function PlaylistView() {
           title={`Reproductor: ${playlist.fullTitle}.`}
           tracks={tracks}
           currentTrackIndex={currentTrackIndex}
-          mutedTrackIds={mutedTrackIds}
+          isGuitarMuted={isGuitarMuted}
           onSelectTrack={handleSelectTrack}
           onToggleMute={handleToggleMute}
           onReorder={handleReorderTracks}

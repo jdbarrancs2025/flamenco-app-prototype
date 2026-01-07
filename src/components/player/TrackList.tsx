@@ -19,9 +19,9 @@ interface TrackListProps {
   title: string;
   tracks: Track[];
   currentTrackIndex: number;
-  mutedTrackIds?: Set<string>;
+  isGuitarMuted?: boolean;
   onSelectTrack: (index: number) => void;
-  onToggleMute?: (trackId: string) => void;
+  onToggleMute?: () => void;
   onReorder?: (oldIndex: number, newIndex: number) => void;
 }
 
@@ -29,7 +29,7 @@ export function TrackList({
   title,
   tracks,
   currentTrackIndex,
-  mutedTrackIds = new Set(),
+  isGuitarMuted = false,
   onSelectTrack,
   onToggleMute,
   onReorder,
@@ -102,9 +102,9 @@ export function TrackList({
                 track={track}
                 index={index}
                 isActive={index === currentTrackIndex}
-                isGuitarMuted={mutedTrackIds.has(track.id)}
+                isGuitarMuted={isGuitarMuted}
                 onSelect={() => onSelectTrack(index)}
-                onToggleMute={() => onToggleMute?.(track.id)}
+                onToggleMute={() => onToggleMute?.()}
               />
             ))}
           </SortableContext>
