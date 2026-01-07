@@ -399,7 +399,15 @@ class AudioEngine {
    * Sets _isPlaying = false BEFORE stopping to prevent onended callback from firing
    */
   pause(): void {
-    if (!this._isPlaying || !this.audioContext) return;
+    console.log('[AudioEngine.pause] Called', {
+      isPlaying: this._isPlaying,
+      hasContext: !!this.audioContext,
+    });
+
+    if (!this._isPlaying || !this.audioContext) {
+      console.log('[AudioEngine.pause] Early return: not playing or no context');
+      return;
+    }
 
     // Calculate current position before stopping
     const elapsed = (this.audioContext.currentTime - this.startTime) * this._playbackRate;
@@ -425,6 +433,7 @@ class AudioEngine {
       // Ignore errors if already stopped
     }
 
+    console.log('[AudioEngine.pause] Playback paused');
     this.notifyStateChange();
   }
 

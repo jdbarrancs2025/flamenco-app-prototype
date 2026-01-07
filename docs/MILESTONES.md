@@ -110,17 +110,17 @@
 
 ### Acceptance Criteria
 
-- [ ] User can play/pause audio
-- [ ] User can select any track to play
-- [ ] Playlist auto-advances through all tracks
-- [ ] User can reorder tracks via drag & drop
-- [ ] User can loop a single track
-- [ ] User can mute guitar on mutable tracks
-- [ ] Mute state persists correctly
-- [ ] User can change playback speed
-- [ ] Speed change doesn't break sync
-- [ ] Works on iOS Safari
-- [ ] Works on Android Chrome
+- [x] User can play/pause audio
+- [x] User can select any track to play
+- [x] Playlist auto-advances through all tracks
+- [x] User can reorder tracks via drag & drop
+- [x] User can loop a single track
+- [x] User can mute guitar on mutable tracks
+- [x] Mute state persists correctly
+- [x] User can change playback speed
+- [x] Speed change doesn't break sync
+- [x] Works on iOS Safari
+- [x] Works on Android Chrome
 
 ### Technical Notes
 

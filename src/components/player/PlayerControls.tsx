@@ -93,7 +93,7 @@ export function PlayerControls({
         } ${isGuitarMuted ? 'text-primary' : 'text-black'}`}
         onClick={onToggleMute}
         disabled={!canMuteGuitar}
-        aria-label="Silenciar guitarra"
+        aria-label={isGuitarMuted ? 'Activar sonido guitarra' : 'Silenciar guitarra'}
       >
         <WaveformIcon size={34} />
       </button>
