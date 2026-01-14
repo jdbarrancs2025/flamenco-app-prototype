@@ -22,6 +22,7 @@ export function PlaylistView() {
     loadTrack,
     prefetchTrack,
     play,
+    playAsync,  // NEW: async version for auto-advance (iOS fix)
     pause,
     stop,
     setPlaybackRate: setEnginePlaybackRate,
@@ -102,8 +103,9 @@ export function PlaylistView() {
   }, [currentTrackIndex, tracks, audioState.currentTrackId, loadTrack, setGuitarMuted]);
 
   // Auto-advance on track end - register callback ONCE with stable refs
+  // KEY iOS FIX: Use playAsync() instead of relying on wasPlayingRef + effect
   useEffect(() => {
-    onTrackEnd(() => {
+    onTrackEnd(async () => {
       // Read FRESH values from refs (not stale closure captures)
       const currentIndex = currentTrackIndexRef.current;
       const looping = isLoopingRef.current;
@@ -115,46 +117,68 @@ export function PlaylistView() {
         tracksLength: currentTracks.length,
       });
 
-      // Always set wasPlayingRef to trigger auto-play after track loads
-      wasPlayingRef.current = true;
-
       if (looping) {
         // Replay current track - load it again to reset position
         if (isLoadingTrackRef.current) return;  // Prevent concurrent loads
         const track = currentTracks[currentIndex];
         if (track) {
           isLoadingTrackRef.current = true;
-          loadTrack(track).then(() => {
+          try {
+            await loadTrack(track);
             // Use per-track mute state (persists when looping same track)
             setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
+            // iOS FIX: Use playAsync to properly await context resume
+            console.log('[PlaylistView.onTrackEnd] Loop: calling playAsync()');
+            await playAsync();
+          } catch (error) {
+            console.error('[PlaylistView.onTrackEnd] Loop failed:', error);
+          } finally {
             isLoadingTrackRef.current = false;
-            // Auto-play effect will call play() when loading completes
-          }).catch(() => {
-            isLoadingTrackRef.current = false;
-          });
+          }
         }
       } else {
         // Advance to next (or loop playlist)
         const nextIndex = (currentIndex + 1) % currentTracks.length;
-        setCurrentTrackIndex(nextIndex);
+        const nextTrack = currentTracks[nextIndex];
+
+        console.log('[PlaylistView.onTrackEnd] Advancing to next track', {
+          nextIndex,
+          nextTrackId: nextTrack?.id,
+        });
+
+        if (nextTrack) {
+          if (isLoadingTrackRef.current) return;  // Prevent concurrent loads
+          isLoadingTrackRef.current = true;
+          try {
+            // Update the track index first
+            setCurrentTrackIndex(nextIndex);
+            currentTrackIndexRef.current = nextIndex;  // Update ref immediately
+
+            // Load the next track
+            await loadTrack(nextTrack);
+            // Apply mute state for the new track
+            setGuitarMuted(mutedTrackIdsRef.current.has(nextTrack.id));
+            // iOS FIX: Use playAsync to properly await context resume
+            console.log('[PlaylistView.onTrackEnd] Advance: calling playAsync()');
+            const success = await playAsync();
+            console.log('[PlaylistView.onTrackEnd] Advance playAsync result:', success);
+          } catch (error) {
+            console.error('[PlaylistView.onTrackEnd] Advance failed:', error);
+          } finally {
+            isLoadingTrackRef.current = false;
+          }
+        }
       }
     });
-  }, [onTrackEnd, loadTrack, setGuitarMuted]);  // Only stable function dependencies
+  }, [onTrackEnd, loadTrack, setGuitarMuted, playAsync]);
 
-  // Auto-play when track changes (if was playing)
+  // Auto-play when track changes (if was playing) - for track selection scenarios
+  // This effect handles when user clicks on a different track while playing
   useEffect(() => {
     const currentTrack = tracks[currentTrackIndex];
-    console.log('[PlaylistView.autoPlay] Effect check', {
-      wasPlaying: wasPlayingRef.current,
-      isLoading: audioState.isLoading,
-      duration: audioState.duration,
-      isPlaying: audioState.isPlaying,
-      currentTrackId: audioState.currentTrackId,
-      expectedTrackId: currentTrack?.id,
-    });
 
     // Only auto-play when:
-    // 1. We were playing before
+    // 1. We were playing before (user selected a different track while playing)
     // 2. Not currently loading
     // 3. Track has duration
     // 4. The LOADED track matches the SELECTED track (prevents playing old buffer)
@@ -162,11 +186,15 @@ export function PlaylistView() {
         !audioState.isLoading &&
         audioState.duration > 0 &&
         audioState.currentTrackId === currentTrack?.id) {
-      console.log('[PlaylistView.autoPlay] Triggering play()');
-      wasPlayingRef.current = false;  // Reset FIRST to prevent double-call in race conditions
-      play();
+      console.log('[PlaylistView.autoPlay] Track selection auto-play, calling playAsync()');
+      wasPlayingRef.current = false;  // Reset FIRST to prevent double-call
+
+      // iOS FIX: Use playAsync for proper async handling
+      playAsync().then(success => {
+        console.log('[PlaylistView.autoPlay] playAsync result:', success);
+      });
     }
-  }, [audioState.isLoading, audioState.duration, audioState.isPlaying, audioState.currentTrackId, currentTrackIndex, tracks, play]);
+  }, [audioState.isLoading, audioState.duration, audioState.currentTrackId, currentTrackIndex, tracks, playAsync]);
 
   // Prefetch next track when playback starts (for faster transitions)
   useEffect(() => {
@@ -196,6 +224,7 @@ export function PlaylistView() {
       // Initialize AudioContext synchronously on user gesture (iOS requirement)
       // Must NOT use await - gesture context expires if async
       initialize();
+      // Use synchronous play() here - we're in a user gesture context
       play();
     }
   };
@@ -271,6 +300,7 @@ export function PlaylistView() {
   };
 
   const handleSelectTrack = (index: number) => {
+    // Remember if we were playing (to auto-resume after track loads)
     wasPlayingRef.current = audioState.isPlaying;
     stop();
     setCurrentTrackIndex(index);
