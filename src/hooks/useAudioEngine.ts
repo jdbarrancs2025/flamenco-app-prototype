@@ -69,6 +69,10 @@ class AudioEngine {
   private onTrackEndCallback: (() => void) | null = null;
   private onStateChangeCallback: (() => void) | null = null;
 
+  // iOS keep-alive oscillator (prevents "interrupted" state)
+  private keepAliveOscillator: OscillatorNode | null = null;
+  private keepAliveGain: GainNode | null = null;
+
   /**
    * Unlock iOS audio by playing silent audio via HTML5 <audio> element.
    * This tricks iOS into using "playback" mode instead of "ambient" mode,
@@ -103,8 +107,9 @@ class AudioEngine {
     this.unlockiOSAudio();
 
     // Create AudioContext (with webkit prefix for older iOS Safari)
+    // Fix: Set sampleRate to 44100 to prevent iOS distortion/crackling
     const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    this.audioContext = new AudioContextClass();
+    this.audioContext = new AudioContextClass({ sampleRate: 44100 });
 
     // Resume AudioContext synchronously (must stay in user gesture context)
     if (this.audioContext.state === 'suspended') {
@@ -119,6 +124,15 @@ class AudioEngine {
     this.mainGainNode.connect(this.audioContext.destination);
     this.guitarGainNode.connect(this.audioContext.destination);
 
+    // iOS Fix: Keep near-silent oscillator running to prevent "interrupted" state
+    // This tricks iOS into keeping the AudioContext active
+    this.keepAliveOscillator = this.audioContext.createOscillator();
+    this.keepAliveGain = this.audioContext.createGain();
+    this.keepAliveGain.gain.value = 1e-37; // Inaudible (essentially zero)
+    this.keepAliveOscillator.connect(this.keepAliveGain);
+    this.keepAliveGain.connect(this.audioContext.destination);
+    this.keepAliveOscillator.start();
+
     // Setup iOS Safari handling for future interactions
     this.setupiOSHandling();
 
@@ -130,6 +144,7 @@ class AudioEngine {
    * Handle iOS Safari specific audio context issues
    * - Resume suspended context on user interaction
    * - Handle interrupted state when app goes to background
+   * - Handle page visibility changes
    */
   private setupiOSHandling(): void {
     if (!this.audioContext) return;
@@ -138,8 +153,8 @@ class AudioEngine {
 
     // Resume on user interaction (iOS Safari suspends by default)
     const resume = () => {
-      if (ctx.state === 'suspended') {
-        ctx.resume();
+      if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
+        ctx.resume().catch(() => {});
       }
     };
 
@@ -148,10 +163,28 @@ class AudioEngine {
       document.body.addEventListener(event, resume, { once: true });
     });
 
-    // Handle interrupted state (iOS background/foreground transitions)
+    // Fix 3: Handle page visibility changes (iOS background/foreground)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
+          console.log('[AudioEngine] Page visible, resuming AudioContext from state:', ctx.state);
+          ctx.resume().catch(() => {});
+        }
+      }
+    });
+
+    // Fix 4: More robust interrupted state recovery with retry
     ctx.onstatechange = () => {
-      if (ctx.state === 'interrupted') {
-        ctx.resume();
+      console.log('[AudioEngine] AudioContext state changed:', ctx.state);
+      if (ctx.state === 'suspended' || (ctx.state as string) === 'interrupted') {
+        ctx.resume().catch(() => {
+          // Retry after short delay if first attempt fails
+          setTimeout(() => {
+            if (ctx.state !== 'running') {
+              ctx.resume().catch(() => {});
+            }
+          }, 100);
+        });
       }
     };
   }
@@ -602,6 +635,21 @@ class AudioEngine {
     }
 
     this.stop();
+
+    // Stop and disconnect keep-alive oscillator
+    if (this.keepAliveOscillator) {
+      try {
+        this.keepAliveOscillator.stop();
+      } catch {
+        // Ignore if already stopped
+      }
+      this.keepAliveOscillator.disconnect();
+      this.keepAliveOscillator = null;
+    }
+    if (this.keepAliveGain) {
+      this.keepAliveGain.disconnect();
+      this.keepAliveGain = null;
+    }
 
     // Disconnect gain nodes
     this.mainGainNode?.disconnect();
