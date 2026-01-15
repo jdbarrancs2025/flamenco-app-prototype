@@ -226,6 +226,40 @@ export function PlaylistView() {
     }
   }, [audioState.isPlaying, currentTrackIndex, tracks, prefetchTrack]);
 
+  // Aggressive prefetch: load ALL tracks when playlist opens
+  useEffect(() => {
+    if (!playlist || tracks.length === 0) return;
+
+    // Initialize audio engine first (required for prefetch to work)
+    initialize();
+
+    debugLog.info(TAG, 'Aggressive prefetch: Starting for all tracks', {
+      trackCount: tracks.length
+    });
+
+    // Prefetch all tracks with small delays to avoid network congestion
+    const prefetchAll = async () => {
+      for (let i = 0; i < tracks.length; i++) {
+        // Small delay between fetches to spread network load
+        if (i > 0) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        debugLog.debug(TAG, 'Aggressive prefetch: Loading track', {
+          index: i,
+          trackId: tracks[i].id
+        });
+
+        prefetchTrack(tracks[i]).catch(() => {
+          // Ignore errors - prefetch is best-effort
+        });
+      }
+      debugLog.info(TAG, 'Aggressive prefetch: All tracks queued');
+    };
+
+    prefetchAll();
+  }, [playlist, tracks, initialize, prefetchTrack]);
+
   if (!playlist) {
     return null;
   }
