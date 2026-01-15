@@ -8,7 +8,10 @@ import { PlayerControls } from '../components/player/PlayerControls';
 import { TrackList } from '../components/player/TrackList';
 import { getPlaylistById } from '../data/playlists';
 import { useAudioEngine } from '../hooks/useAudioEngine';
+import { debugLog } from '../utils/debugLogger';
 import type { Track } from '../types';
+
+const TAG = 'PlaylistView';
 
 export function PlaylistView() {
   const { playlistId } = useParams<{ playlistId: string }>();
@@ -111,27 +114,32 @@ export function PlaylistView() {
       const looping = isLoopingRef.current;
       const currentTracks = tracksRef.current;
 
-      console.log('[PlaylistView.onTrackEnd] Callback fired', {
+      debugLog.info(TAG, 'onTrackEnd: Callback fired', {
         currentIndex,
         looping,
         tracksLength: currentTracks.length,
+        isLoadingTrack: isLoadingTrackRef.current,
       });
 
       if (looping) {
         // Replay current track - load it again to reset position
-        if (isLoadingTrackRef.current) return;  // Prevent concurrent loads
+        if (isLoadingTrackRef.current) {
+          debugLog.warn(TAG, 'onTrackEnd: Loop - already loading, skipping');
+          return;
+        }
         const track = currentTracks[currentIndex];
         if (track) {
           isLoadingTrackRef.current = true;
+          debugLog.info(TAG, 'onTrackEnd: Loop - loading track', { trackId: track.id });
           try {
             await loadTrack(track);
-            // Use per-track mute state (persists when looping same track)
+            debugLog.info(TAG, 'onTrackEnd: Loop - track loaded, setting mute');
             setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
-            // iOS FIX: Use playAsync to properly await context resume
-            console.log('[PlaylistView.onTrackEnd] Loop: calling playAsync()');
-            await playAsync();
+            debugLog.info(TAG, 'onTrackEnd: Loop - calling playAsync()');
+            const success = await playAsync();
+            debugLog.info(TAG, 'onTrackEnd: Loop - playAsync result', { success });
           } catch (error) {
-            console.error('[PlaylistView.onTrackEnd] Loop failed:', error);
+            debugLog.error(TAG, 'onTrackEnd: Loop failed', (error as Error)?.message);
           } finally {
             isLoadingTrackRef.current = false;
           }
@@ -141,29 +149,33 @@ export function PlaylistView() {
         const nextIndex = (currentIndex + 1) % currentTracks.length;
         const nextTrack = currentTracks[nextIndex];
 
-        console.log('[PlaylistView.onTrackEnd] Advancing to next track', {
+        debugLog.info(TAG, 'onTrackEnd: Advancing to next', {
           nextIndex,
           nextTrackId: nextTrack?.id,
         });
 
         if (nextTrack) {
-          if (isLoadingTrackRef.current) return;  // Prevent concurrent loads
+          if (isLoadingTrackRef.current) {
+            debugLog.warn(TAG, 'onTrackEnd: Advance - already loading, skipping');
+            return;
+          }
           isLoadingTrackRef.current = true;
           try {
             // Update the track index first
+            debugLog.info(TAG, 'onTrackEnd: Advance - setting index', { nextIndex });
             setCurrentTrackIndex(nextIndex);
-            currentTrackIndexRef.current = nextIndex;  // Update ref immediately
+            currentTrackIndexRef.current = nextIndex;
 
             // Load the next track
+            debugLog.info(TAG, 'onTrackEnd: Advance - loading track', { trackId: nextTrack.id });
             await loadTrack(nextTrack);
-            // Apply mute state for the new track
+            debugLog.info(TAG, 'onTrackEnd: Advance - track loaded, setting mute');
             setGuitarMuted(mutedTrackIdsRef.current.has(nextTrack.id));
-            // iOS FIX: Use playAsync to properly await context resume
-            console.log('[PlaylistView.onTrackEnd] Advance: calling playAsync()');
+            debugLog.info(TAG, 'onTrackEnd: Advance - calling playAsync()');
             const success = await playAsync();
-            console.log('[PlaylistView.onTrackEnd] Advance playAsync result:', success);
+            debugLog.info(TAG, 'onTrackEnd: Advance - playAsync result', { success });
           } catch (error) {
-            console.error('[PlaylistView.onTrackEnd] Advance failed:', error);
+            debugLog.error(TAG, 'onTrackEnd: Advance failed', (error as Error)?.message);
           } finally {
             isLoadingTrackRef.current = false;
           }
@@ -177,21 +189,26 @@ export function PlaylistView() {
   useEffect(() => {
     const currentTrack = tracks[currentTrackIndex];
 
-    // Only auto-play when:
-    // 1. We were playing before (user selected a different track while playing)
-    // 2. Not currently loading
-    // 3. Track has duration
-    // 4. The LOADED track matches the SELECTED track (prevents playing old buffer)
-    if (wasPlayingRef.current &&
+    const shouldAutoPlay = wasPlayingRef.current &&
         !audioState.isLoading &&
         audioState.duration > 0 &&
-        audioState.currentTrackId === currentTrack?.id) {
-      console.log('[PlaylistView.autoPlay] Track selection auto-play, calling playAsync()');
+        audioState.currentTrackId === currentTrack?.id;
+
+    debugLog.debug(TAG, 'autoPlay effect check', {
+      wasPlaying: wasPlayingRef.current,
+      isLoading: audioState.isLoading,
+      duration: audioState.duration,
+      currentTrackId: audioState.currentTrackId,
+      expectedTrackId: currentTrack?.id,
+      shouldAutoPlay,
+    });
+
+    if (shouldAutoPlay) {
+      debugLog.info(TAG, 'autoPlay: Triggering playAsync()');
       wasPlayingRef.current = false;  // Reset FIRST to prevent double-call
 
-      // iOS FIX: Use playAsync for proper async handling
       playAsync().then(success => {
-        console.log('[PlaylistView.autoPlay] playAsync result:', success);
+        debugLog.info(TAG, 'autoPlay: playAsync result', { success });
       });
     }
   }, [audioState.isLoading, audioState.duration, audioState.currentTrackId, currentTrackIndex, tracks, playAsync]);
@@ -218,11 +235,19 @@ export function PlaylistView() {
   const isGuitarMuted = currentTrack ? mutedTrackIds.has(currentTrack.id) : false;
 
   const handlePlayPause = () => {
+    debugLog.info(TAG, 'handlePlayPause: Called', {
+      isPlaying: audioState.isPlaying,
+      isInitialized: audioState.isInitialized,
+      duration: audioState.duration,
+      currentTrackId: audioState.currentTrackId,
+    });
+
     if (audioState.isPlaying) {
+      debugLog.info(TAG, 'handlePlayPause: Pausing');
       pause();
     } else {
       // Initialize AudioContext synchronously on user gesture (iOS requirement)
-      // Must NOT use await - gesture context expires if async
+      debugLog.info(TAG, 'handlePlayPause: Initializing and playing');
       initialize();
       // Use synchronous play() here - we're in a user gesture context
       play();
@@ -300,6 +325,11 @@ export function PlaylistView() {
   };
 
   const handleSelectTrack = (index: number) => {
+    debugLog.info(TAG, 'handleSelectTrack: Called', {
+      index,
+      wasPlaying: audioState.isPlaying,
+      currentIndex: currentTrackIndex,
+    });
     // Remember if we were playing (to auto-resume after track loads)
     wasPlayingRef.current = audioState.isPlaying;
     stop();

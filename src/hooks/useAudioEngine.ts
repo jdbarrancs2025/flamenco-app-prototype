@@ -1,9 +1,12 @@
 // src/hooks/useAudioEngine.ts
 // Web Audio API engine for synchronized dual-track playback
-// With comprehensive iOS Safari fixes
+// With comprehensive iOS Safari fixes and debug logging
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Track } from '../types';
+import { debugLog } from '../utils/debugLogger';
+
+const TAG = 'AudioEngine';
 
 /**
  * Extended AudioContext type to include webkit prefix for iOS Safari
@@ -38,18 +41,6 @@ function isContextNotRunning(ctx: AudioContext): boolean {
 
 /**
  * AudioEngine class - handles all Web Audio API operations
- *
- * Key concepts:
- * - AudioContext: The main audio processing graph
- * - GainNode: Controls volume (used for muting guitar)
- * - AudioBufferSourceNode: Plays audio buffers (single-use, must recreate for each play)
- * - AudioBuffer: Decoded audio data (cached for reuse)
- *
- * iOS Safari quirks handled:
- * - AudioContext starts in 'suspended' state and needs user gesture to resume
- * - resume() is async - must await the Promise before checking state
- * - 'interrupted' state (non-standard) occurs on background/foreground transitions
- * - start() is a no-op if context is not 'running'
  */
 class AudioEngine {
   // Audio Context
@@ -71,13 +62,13 @@ class AudioEngine {
   // Playback State
   private _isPlaying = false;
   private _isInitialized = false;
-  private startTime = 0;        // audioContext.currentTime when started
-  private startOffset = 0;      // Position in track when started
+  private startTime = 0;
+  private startOffset = 0;
   private _playbackRate = 1.0;
   private guitarMuted = false;
   private currentTrackId: string | null = null;
 
-  // Load versioning (to ignore stale async completions)
+  // Load versioning
   private loadVersion = 0;
   private loadAbortController: AbortController | null = null;
 
@@ -87,73 +78,96 @@ class AudioEngine {
 
   // iOS detection
   private isIOS: boolean;
+  private userAgent: string;
 
   constructor() {
-    // Detect iOS (includes iPad, iPhone, iPod, and iOS browsers like Chrome on iOS)
-    this.isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  }
+    this.userAgent = typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown';
+    this.isIOS = /iPad|iPhone|iPod/.test(this.userAgent) ||
+      (typeof navigator !== 'undefined' && navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
-  /**
-   * Unlock iOS audio by playing silent audio via HTML5 <audio> element.
-   * This tricks iOS into using "playback" mode instead of "ambient" mode,
-   * allowing audio to play even when the silent/mute switch is ON.
-   */
-  private unlockiOSAudio(): void {
-    // Create audio element (iOS treats <audio> differently than Web Audio)
-    const audio = document.createElement('audio');
-
-    // Tiny silent MP3 data URI
-    audio.src = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+9DEAAAIAANIAAAAgAADSAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//tQxBkAAADSAAAAAAAAANIAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
-
-    // Required attributes for iOS
-    audio.setAttribute('playsinline', 'true');
-    audio.setAttribute('webkit-playsinline', 'true');
-
-    // Play silently to unlock "playback" mode
-    audio.volume = 0.001;
-    audio.play().catch(() => {
-      // Ignore errors - this is a best-effort unlock
+    debugLog.info(TAG, 'Constructor called', {
+      isIOS: this.isIOS,
+      userAgent: this.userAgent.substring(0, 100),
+      platform: typeof navigator !== 'undefined' ? navigator.platform : 'unknown',
+      maxTouchPoints: typeof navigator !== 'undefined' ? navigator.maxTouchPoints : 0,
     });
   }
 
   /**
+   * Unlock iOS audio via HTML5 audio element
+   */
+  private unlockiOSAudio(): void {
+    debugLog.debug(TAG, 'unlockiOSAudio: Starting');
+    const audio = document.createElement('audio');
+    audio.src = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4Ljc2LjEwMAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAABhgC7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7u7//////////////////////////////////////////////////////////////////8AAAAATGF2YzU4LjEzAAAAAAAAAAAAAAAAJAAAAAAAAAAAAYYoRwmHAAAAAAD/+9DEAAAIAANIAAAAgAADSAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV//tQxBkAAADSAAAAAAAAANIAAAAATEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVV';
+    audio.setAttribute('playsinline', 'true');
+    audio.setAttribute('webkit-playsinline', 'true');
+    audio.volume = 0.001;
+
+    audio.play()
+      .then(() => {
+        debugLog.info(TAG, 'unlockiOSAudio: Silent audio played successfully');
+      })
+      .catch((err) => {
+        debugLog.warn(TAG, 'unlockiOSAudio: Silent audio play failed', err?.message);
+      });
+  }
+
+  /**
    * Initialize the AudioContext and gain nodes
-   * Must be called SYNCHRONOUSLY during a user gesture on iOS
    */
   initialize(): void {
-    if (this._isInitialized) return;
+    debugLog.info(TAG, 'initialize: Called', { alreadyInitialized: this._isInitialized });
 
-    // Unlock iOS audio first (switches to "playback" mode for silent switch bypass)
-    this.unlockiOSAudio();
-
-    // Create AudioContext (with webkit prefix for older iOS Safari)
-    // NOTE: Do NOT force sampleRate - let iOS use its native rate to avoid resampling delays
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    this.audioContext = new AudioContextClass();
-
-    // Resume AudioContext synchronously (must stay in user gesture context)
-    // On iOS, this starts the unlock process but may not complete immediately
-    if (isContextNotRunning(this.audioContext)) {
-      this.audioContext.resume().catch(() => {});
+    if (this._isInitialized) {
+      debugLog.debug(TAG, 'initialize: Already initialized, skipping');
+      return;
     }
 
-    // Create gain nodes for independent volume control
+    // Unlock iOS audio first
+    this.unlockiOSAudio();
+
+    // Create AudioContext
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    debugLog.debug(TAG, 'initialize: Creating AudioContext', {
+      hasWebkitAudioContext: !!window.webkitAudioContext,
+      hasAudioContext: !!window.AudioContext,
+    });
+
+    this.audioContext = new AudioContextClass();
+
+    debugLog.info(TAG, 'initialize: AudioContext created', {
+      state: this.audioContext.state,
+      sampleRate: this.audioContext.sampleRate,
+      baseLatency: (this.audioContext as any).baseLatency,
+      outputLatency: (this.audioContext as any).outputLatency,
+    });
+
+    // Resume if needed
+    if (isContextNotRunning(this.audioContext)) {
+      debugLog.info(TAG, 'initialize: Context not running, calling resume()');
+      this.audioContext.resume()
+        .then(() => {
+          debugLog.info(TAG, 'initialize: resume() resolved', { state: this.audioContext?.state });
+        })
+        .catch((err) => {
+          debugLog.error(TAG, 'initialize: resume() failed', err?.message);
+        });
+    }
+
+    // Create gain nodes
     this.mainGainNode = this.audioContext.createGain();
     this.guitarGainNode = this.audioContext.createGain();
-
-    // Connect gain nodes to destination (speakers)
     this.mainGainNode.connect(this.audioContext.destination);
     this.guitarGainNode.connect(this.audioContext.destination);
 
-    // Setup iOS Safari handling for future interactions
+    // Setup iOS handling
     this.setupiOSHandling();
 
     this._isInitialized = true;
     this.notifyStateChange();
 
-    console.log('[AudioEngine.initialize] Completed', {
-      isIOS: this.isIOS,
+    debugLog.info(TAG, 'initialize: Completed', {
       contextState: this.audioContext.state,
       sampleRate: this.audioContext.sampleRate,
     });
@@ -161,98 +175,111 @@ class AudioEngine {
 
   /**
    * Handle iOS Safari specific audio context issues
-   * - Resume suspended/interrupted context on user interaction
-   * - Handle page visibility changes for background/foreground transitions
    */
   private setupiOSHandling(): void {
     if (!this.audioContext) return;
 
     const ctx = this.audioContext;
+    debugLog.debug(TAG, 'setupiOSHandling: Setting up event listeners');
 
-    // Resume on any user interaction (iOS Safari suspends by default)
-    // Using { once: false } because iOS can re-suspend the context
-    const resumeOnInteraction = () => {
+    // Resume on user interaction
+    const resumeOnInteraction = (event: Event) => {
       if (isContextNotRunning(ctx)) {
-        console.log('[AudioEngine] User interaction detected, resuming from:', ctx.state);
-        ctx.resume().catch(() => {});
+        debugLog.info(TAG, `setupiOSHandling: User interaction (${event.type}), resuming from ${ctx.state}`);
+        ctx.resume()
+          .then(() => {
+            debugLog.info(TAG, 'setupiOSHandling: resume() after interaction resolved', { state: ctx.state });
+          })
+          .catch((err) => {
+            debugLog.error(TAG, 'setupiOSHandling: resume() after interaction failed', err?.message);
+          });
       }
     };
 
-    // Add listeners for common user interactions
-    // These help re-unlock the context if iOS suspends it
     ['touchstart', 'touchend', 'mousedown', 'click'].forEach(event => {
       document.addEventListener(event, resumeOnInteraction, { passive: true });
     });
 
-    // Handle page visibility changes (iOS background/foreground)
+    // Page visibility handler
     document.addEventListener('visibilitychange', () => {
+      debugLog.info(TAG, 'setupiOSHandling: visibilitychange', {
+        visibilityState: document.visibilityState,
+        contextState: ctx.state,
+      });
       if (document.visibilityState === 'visible' && isContextNotRunning(ctx)) {
-        console.log('[AudioEngine] Page visible, resuming AudioContext from:', ctx.state);
-        ctx.resume().catch(() => {});
+        debugLog.info(TAG, 'setupiOSHandling: Page visible, resuming');
+        ctx.resume().catch((err) => {
+          debugLog.error(TAG, 'setupiOSHandling: resume() on visible failed', err?.message);
+        });
       }
     });
 
-    // Log state changes for debugging (but don't auto-resume here - it causes race conditions)
+    // State change handler
     ctx.onstatechange = () => {
-      console.log('[AudioEngine] AudioContext state changed to:', ctx.state);
+      debugLog.info(TAG, 'setupiOSHandling: AudioContext state changed', { newState: ctx.state });
     };
   }
 
   /**
-   * Ensure AudioContext is in 'running' state
-   * Returns true if context is ready for playback, false otherwise
-   *
-   * This is the KEY FIX for iOS: properly await the resume() Promise
+   * Ensure AudioContext is running
    */
   private async ensureContextRunning(): Promise<boolean> {
-    if (!this.audioContext) return false;
+    debugLog.info(TAG, 'ensureContextRunning: Called', {
+      hasContext: !!this.audioContext,
+      state: this.audioContext?.state,
+    });
 
-    // Already running - good to go
+    if (!this.audioContext) {
+      debugLog.error(TAG, 'ensureContextRunning: No AudioContext');
+      return false;
+    }
+
     if (this.audioContext.state === 'running') {
+      debugLog.debug(TAG, 'ensureContextRunning: Already running');
       return true;
     }
 
-    // Context is suspended or interrupted - try to resume
     if (isContextNotRunning(this.audioContext)) {
-      console.log('[AudioEngine.ensureContextRunning] Context not running, attempting resume...', {
+      debugLog.info(TAG, 'ensureContextRunning: Context not running, calling resume()', {
         currentState: this.audioContext.state,
       });
 
+      const startTime = Date.now();
+
       try {
-        // CRITICAL: Actually await the resume() Promise!
         await this.audioContext.resume();
-
-        // Small delay for iOS to stabilize (helps with edge cases)
-        if (this.isIOS) {
-          await new Promise(resolve => setTimeout(resolve, 10));
-        }
-
-        console.log('[AudioEngine.ensureContextRunning] After resume:', {
+        const elapsed = Date.now() - startTime;
+        debugLog.info(TAG, 'ensureContextRunning: resume() completed', {
+          elapsed: `${elapsed}ms`,
           newState: this.audioContext.state,
         });
+
+        // Small delay for iOS
+        if (this.isIOS) {
+          debugLog.debug(TAG, 'ensureContextRunning: iOS delay (10ms)');
+          await new Promise(resolve => setTimeout(resolve, 10));
+        }
       } catch (error) {
-        console.error('[AudioEngine.ensureContextRunning] Resume failed:', error);
+        debugLog.error(TAG, 'ensureContextRunning: resume() threw', (error as Error)?.message);
         return false;
       }
     }
 
-    // Final check - cast to string to handle all possible states including 'running'
     const currentState = this.audioContext.state as string;
     const isRunning = currentState === 'running';
-    if (!isRunning) {
-      console.warn('[AudioEngine.ensureContextRunning] Context still not running:', currentState);
-    }
+    debugLog.info(TAG, 'ensureContextRunning: Final check', { currentState, isRunning });
     return isRunning;
   }
 
   /**
-   * Load and decode an audio file into a buffer
-   * Uses caching to avoid re-fetching the same file
-   * Supports AbortController for cancellation
+   * Load audio buffer from URL
    */
   private async loadBuffer(url: string, signal?: AbortSignal): Promise<AudioBuffer> {
-    // Check cache first
+    const shortUrl = url.split('/').pop() || url;
+    debugLog.debug(TAG, 'loadBuffer: Starting', { url: shortUrl });
+
     if (this.bufferCache.has(url)) {
+      debugLog.debug(TAG, 'loadBuffer: Cache hit', { url: shortUrl });
       return this.bufferCache.get(url)!;
     }
 
@@ -260,65 +287,71 @@ class AudioEngine {
       throw new Error('AudioContext not initialized');
     }
 
-    // Fetch the audio file with abort signal
+    const startTime = Date.now();
     const response = await fetch(url, { signal });
     if (!response.ok) {
-      throw new Error(`Failed to fetch audio: ${url}`);
+      throw new Error(`Failed to fetch: ${response.status}`);
     }
 
-    // Decode the audio data
     const arrayBuffer = await response.arrayBuffer();
+    const fetchTime = Date.now() - startTime;
+    debugLog.debug(TAG, 'loadBuffer: Fetched', { url: shortUrl, fetchTime: `${fetchTime}ms`, bytes: arrayBuffer.byteLength });
+
+    const decodeStart = Date.now();
     const audioBuffer = await this.audioContext.decodeAudioData(arrayBuffer);
+    const decodeTime = Date.now() - decodeStart;
 
-    // Cache for reuse
+    debugLog.info(TAG, 'loadBuffer: Decoded', {
+      url: shortUrl,
+      fetchTime: `${fetchTime}ms`,
+      decodeTime: `${decodeTime}ms`,
+      duration: `${audioBuffer.duration.toFixed(2)}s`,
+      sampleRate: audioBuffer.sampleRate,
+    });
+
     this.bufferCache.set(url, audioBuffer);
-
     return audioBuffer;
   }
 
   /**
-   * Load a track's audio files into buffers
-   * For mutable tracks, loads both main and guitar files
-   * Uses versioning and AbortController to handle race conditions
+   * Load a track
    */
   async loadTrack(track: Track): Promise<void> {
-    // Increment version to invalidate any in-flight loads
     const thisLoadVersion = ++this.loadVersion;
-
-    console.log('[AudioEngine.loadTrack] Called', {
+    debugLog.info(TAG, 'loadTrack: Called', {
       trackId: track.id,
-      wasPlaying: this._isPlaying,
-      currentTrackId: this.currentTrackId,
+      trackName: track.name,
       loadVersion: thisLoadVersion,
+      wasPlaying: this._isPlaying,
     });
 
     if (!this.audioContext) {
+      debugLog.error(TAG, 'loadTrack: AudioContext not initialized');
       throw new Error('AudioContext not initialized');
     }
 
-    // Abort any pending fetch requests from previous loads
     if (this.loadAbortController) {
+      debugLog.debug(TAG, 'loadTrack: Aborting previous load');
       this.loadAbortController.abort();
     }
     this.loadAbortController = new AbortController();
     const signal = this.loadAbortController.signal;
 
-    // Stop any current playback (sets _isPlaying = false FIRST to prevent onended callback)
     if (this._isPlaying) {
+      debugLog.debug(TAG, 'loadTrack: Stopping current playback');
       this.stop();
     }
 
-    // Reset position for new track
     this.startOffset = 0;
     this.currentTrackId = track.id;
 
     try {
-      // Load audio files - parallel for dual-track files, single for others
+      const startTime = Date.now();
       let mainBuffer: AudioBuffer;
       let guitarBuffer: AudioBuffer | null = null;
 
       if (track.hasMuteableGuitar && track.audioFiles.guitar) {
-        // Parallel loading for dual-track files (~50% faster)
+        debugLog.debug(TAG, 'loadTrack: Loading dual-track (parallel)');
         const [main, guitar] = await Promise.all([
           this.loadBuffer(track.audioFiles.main, signal),
           this.loadBuffer(track.audioFiles.guitar, signal),
@@ -326,85 +359,94 @@ class AudioEngine {
         mainBuffer = main;
         guitarBuffer = guitar;
       } else {
-        // Single file loading
+        debugLog.debug(TAG, 'loadTrack: Loading single track');
         mainBuffer = await this.loadBuffer(track.audioFiles.main, signal);
       }
 
-      // Check if this load is still current (another loadTrack may have been called)
       if (thisLoadVersion !== this.loadVersion) {
-        console.log('[AudioEngine.loadTrack] Stale load ignored', {
-          trackId: track.id,
-          thisVersion: thisLoadVersion,
-          currentVersion: this.loadVersion,
-        });
+        debugLog.warn(TAG, 'loadTrack: Stale load, ignoring', { thisVersion: thisLoadVersion, currentVersion: this.loadVersion });
         return;
       }
 
-      // Apply the loaded buffers
       this.mainBuffer = mainBuffer;
       this.guitarBuffer = guitarBuffer;
-      this.notifyStateChange();
 
+      const totalTime = Date.now() - startTime;
+      debugLog.info(TAG, 'loadTrack: Completed', {
+        trackId: track.id,
+        totalTime: `${totalTime}ms`,
+        duration: `${mainBuffer.duration.toFixed(2)}s`,
+      });
+
+      this.notifyStateChange();
     } catch (error) {
-      // Handle abort gracefully
-      if (error instanceof Error && error.name === 'AbortError') {
-        console.log('[AudioEngine.loadTrack] Load aborted - new track selected', {
-          trackId: track.id,
-        });
+      if ((error as Error)?.name === 'AbortError') {
+        debugLog.info(TAG, 'loadTrack: Aborted');
         return;
       }
-      // Re-throw other errors
+      debugLog.error(TAG, 'loadTrack: Failed', (error as Error)?.message);
       throw error;
     }
   }
 
   /**
-   * Prefetch a track's audio files into cache without setting as current
-   * Used for preloading upcoming tracks during playback
+   * Prefetch a track
    */
   async prefetchTrack(track: Track): Promise<void> {
+    debugLog.debug(TAG, 'prefetchTrack: Called', { trackId: track.id });
     if (!this.audioContext) return;
 
-    // Skip if already cached
     const mainCached = this.bufferCache.has(track.audioFiles.main);
     const guitarCached = !track.audioFiles.guitar || this.bufferCache.has(track.audioFiles.guitar);
 
-    if (mainCached && guitarCached) return;
-
-    const promises: Promise<AudioBuffer>[] = [];
-
-    if (!mainCached) {
-      promises.push(this.loadBuffer(track.audioFiles.main));
+    if (mainCached && guitarCached) {
+      debugLog.debug(TAG, 'prefetchTrack: Already cached');
+      return;
     }
 
+    const promises: Promise<AudioBuffer>[] = [];
+    if (!mainCached) promises.push(this.loadBuffer(track.audioFiles.main));
     if (track.hasMuteableGuitar && track.audioFiles.guitar && !guitarCached) {
       promises.push(this.loadBuffer(track.audioFiles.guitar));
     }
 
     if (promises.length > 0) {
       await Promise.all(promises);
+      debugLog.debug(TAG, 'prefetchTrack: Completed', { trackId: track.id });
     }
   }
 
   /**
-   * Internal method to start audio sources
-   * Assumes context is running and buffers are ready
+   * Internal playback start
    */
   private startPlayback(): boolean {
+    debugLog.info(TAG, 'startPlayback: Called', {
+      hasContext: !!this.audioContext,
+      hasBuffer: !!this.mainBuffer,
+      contextState: this.audioContext?.state,
+      startOffset: this.startOffset,
+    });
+
     if (!this.audioContext || !this.mainBuffer || !this.mainGainNode) {
-      console.error('[AudioEngine.startPlayback] Missing required objects');
+      debugLog.error(TAG, 'startPlayback: Missing required objects');
       return false;
     }
 
-    // Create new source node for main audio (sources are single-use)
+    // Double-check context state
+    if (this.audioContext.state !== 'running') {
+      debugLog.error(TAG, 'startPlayback: Context not running!', { state: this.audioContext.state });
+      return false;
+    }
+
+    // Create main source
     this.mainSource = this.audioContext.createBufferSource();
     this.mainSource.buffer = this.mainBuffer;
     this.mainSource.playbackRate.value = this._playbackRate;
     this.mainSource.connect(this.mainGainNode);
 
-    // Handle track end
+    // Setup onended
     this.mainSource.onended = () => {
-      console.log('[AudioEngine.onended] Track ended', {
+      debugLog.info(TAG, 'onended: Fired', {
         wasPlaying: this._isPlaying,
         trackId: this.currentTrackId,
       });
@@ -412,52 +454,54 @@ class AudioEngine {
         this._isPlaying = false;
         this.startOffset = 0;
         this.notifyStateChange();
-        console.log('[AudioEngine.onended] Calling onTrackEndCallback...');
+        debugLog.info(TAG, 'onended: Calling onTrackEndCallback');
         this.onTrackEndCallback?.();
       } else {
-        console.log('[AudioEngine.onended] Skipping callback - was not playing');
+        debugLog.debug(TAG, 'onended: Skipped (was not playing)');
       }
     };
 
-    // Clear old guitar source (prevents reusing already-started nodes)
+    // Create guitar source if needed
     this.guitarSource = null;
-
-    // Create guitar source if track has separate guitar
     if (this.guitarBuffer && this.guitarGainNode) {
       this.guitarSource = this.audioContext.createBufferSource();
       this.guitarSource.buffer = this.guitarBuffer;
       this.guitarSource.playbackRate.value = this._playbackRate;
       this.guitarSource.connect(this.guitarGainNode);
-
-      // Apply current mute state
       this.guitarGainNode.gain.value = this.guitarMuted ? 0 : 1;
     }
 
-    // START BOTH AT EXACT SAME TIME - This is the key to synchronization!
+    // Start both at same time
     const startAt = this.audioContext.currentTime;
     try {
       this.mainSource.start(startAt, this.startOffset);
       this.guitarSource?.start(startAt, this.startOffset);
-      console.log('[AudioEngine.startPlayback] Sources started at offset:', this.startOffset);
+      debugLog.info(TAG, 'startPlayback: Sources started', {
+        startAt,
+        offset: this.startOffset,
+        hasGuitar: !!this.guitarSource,
+      });
     } catch (e) {
-      console.error('[AudioEngine.startPlayback] Source start FAILED:', e);
+      debugLog.error(TAG, 'startPlayback: start() failed', (e as Error)?.message);
       return false;
     }
 
     this._isPlaying = true;
     this.startTime = startAt;
     this.notifyStateChange();
+
+    debugLog.info(TAG, 'startPlayback: SUCCESS', {
+      isPlaying: this._isPlaying,
+      contextState: this.audioContext.state,
+    });
     return true;
   }
 
   /**
-   * Start playback from current position (SYNCHRONOUS version)
-   * Use this when called directly from a user gesture (click/tap handler)
-   *
-   * For auto-advance (non-user-gesture contexts), use playAsync() instead
+   * Synchronous play (for user gestures)
    */
   play(): void {
-    console.log('[AudioEngine.play] Called (sync)', {
+    debugLog.info(TAG, 'play: Called (sync)', {
       hasContext: !!this.audioContext,
       hasBuffer: !!this.mainBuffer,
       isPlaying: this._isPlaying,
@@ -465,48 +509,46 @@ class AudioEngine {
     });
 
     if (!this.audioContext || !this.mainBuffer) {
-      console.log('[AudioEngine.play] Early return: missing context or buffer');
+      debugLog.warn(TAG, 'play: Missing context or buffer');
       return;
     }
     if (this._isPlaying) {
-      console.log('[AudioEngine.play] Early return: already playing');
+      debugLog.debug(TAG, 'play: Already playing');
       return;
     }
 
-    // For synchronous play (user gesture), try to resume synchronously
-    // This works because we're in a user gesture context
     if (isContextNotRunning(this.audioContext)) {
-      console.log('[AudioEngine.play] Context not running, calling resume()...');
-      this.audioContext.resume().catch(() => {});
+      debugLog.info(TAG, 'play: Context not running, calling resume()');
+      this.audioContext.resume()
+        .then(() => debugLog.info(TAG, 'play: resume() resolved', { state: this.audioContext?.state }))
+        .catch((err) => debugLog.error(TAG, 'play: resume() failed', err?.message));
     }
 
-    // Start playback immediately
-    // On desktop/Android, context is usually 'running' by now
-    // On iOS, if context isn't ready yet, the sources will be created but may not produce sound
-    // That's okay - the async version handles iOS better for auto-advance scenarios
     if (this.audioContext.state === 'running') {
+      debugLog.info(TAG, 'play: Context running, starting playback');
       this.startPlayback();
     } else {
-      // iOS Safari: Context might not be running yet
-      // Schedule a retry after a short delay
-      console.log('[AudioEngine.play] Context not running yet, scheduling retry...');
+      debugLog.warn(TAG, 'play: Context not running, scheduling retry', { state: this.audioContext.state });
       setTimeout(() => {
+        debugLog.info(TAG, 'play: Retry check', {
+          isPlaying: this._isPlaying,
+          contextState: this.audioContext?.state,
+        });
         if (!this._isPlaying && this.audioContext?.state === 'running') {
-          console.log('[AudioEngine.play] Retry: context now running');
+          debugLog.info(TAG, 'play: Retry - starting playback');
           this.startPlayback();
+        } else {
+          debugLog.warn(TAG, 'play: Retry - conditions not met');
         }
       }, 50);
     }
   }
 
   /**
-   * Start playback from current position (ASYNC version)
-   * Use this for auto-advance and non-user-gesture contexts
-   *
-   * This properly awaits resume() and handles iOS edge cases
+   * Async play (for auto-advance)
    */
   async playAsync(): Promise<boolean> {
-    console.log('[AudioEngine.playAsync] Called', {
+    debugLog.info(TAG, 'playAsync: Called', {
       hasContext: !!this.audioContext,
       hasBuffer: !!this.mainBuffer,
       isPlaying: this._isPlaying,
@@ -514,116 +556,95 @@ class AudioEngine {
     });
 
     if (!this.audioContext || !this.mainBuffer) {
-      console.log('[AudioEngine.playAsync] Early return: missing context or buffer');
+      debugLog.warn(TAG, 'playAsync: Missing context or buffer');
       return false;
     }
     if (this._isPlaying) {
-      console.log('[AudioEngine.playAsync] Early return: already playing');
+      debugLog.debug(TAG, 'playAsync: Already playing');
       return true;
     }
 
-    // Ensure context is running (with proper async handling)
+    debugLog.info(TAG, 'playAsync: Ensuring context running...');
     const isReady = await this.ensureContextRunning();
+    debugLog.info(TAG, 'playAsync: ensureContextRunning result', { isReady });
+
     if (!isReady) {
-      console.warn('[AudioEngine.playAsync] Context not ready, cannot play');
+      debugLog.error(TAG, 'playAsync: Context not ready');
       return false;
     }
 
-    // Double-check state one more time
     if (this.audioContext.state !== 'running') {
-      console.warn('[AudioEngine.playAsync] Context still not running after ensureContextRunning');
+      debugLog.error(TAG, 'playAsync: Context still not running', { state: this.audioContext.state });
       return false;
     }
 
-    // Start playback
+    debugLog.info(TAG, 'playAsync: Starting playback');
     const success = this.startPlayback();
-    console.log('[AudioEngine.playAsync] Playback started:', success);
+    debugLog.info(TAG, 'playAsync: Result', { success });
     return success;
   }
 
   /**
-   * Pause playback and save current position
-   * Sets _isPlaying = false BEFORE stopping to prevent onended callback from firing
+   * Pause playback
    */
   pause(): void {
-    console.log('[AudioEngine.pause] Called', {
-      isPlaying: this._isPlaying,
-      hasContext: !!this.audioContext,
-    });
+    debugLog.info(TAG, 'pause: Called', { isPlaying: this._isPlaying });
 
     if (!this._isPlaying || !this.audioContext) {
-      console.log('[AudioEngine.pause] Early return: not playing or no context');
+      debugLog.debug(TAG, 'pause: Not playing or no context');
       return;
     }
 
-    // Calculate current position before stopping
     const elapsed = (this.audioContext.currentTime - this.startTime) * this._playbackRate;
     this.startOffset = Math.min(this.startOffset + elapsed, this.getDuration());
 
-    // CRITICAL: Set _isPlaying = false BEFORE stopping sources
-    // This prevents the onended callback from triggering auto-advance
     this._isPlaying = false;
 
-    // Clear onended handlers to prevent spurious callbacks during intentional stop
-    if (this.mainSource) {
-      this.mainSource.onended = null;
-    }
-    if (this.guitarSource) {
-      this.guitarSource.onended = null;
-    }
+    if (this.mainSource) this.mainSource.onended = null;
+    if (this.guitarSource) this.guitarSource.onended = null;
 
-    // Stop sources (they cannot be restarted, must create new ones)
     try {
       this.mainSource?.stop();
       this.guitarSource?.stop();
     } catch {
-      // Ignore errors if already stopped
+      // Ignore
     }
 
-    console.log('[AudioEngine.pause] Playback paused at:', this.startOffset);
+    debugLog.info(TAG, 'pause: Completed', { offset: this.startOffset });
     this.notifyStateChange();
   }
 
   /**
-   * Stop playback and reset position to beginning
+   * Stop playback
    */
   stop(): void {
+    debugLog.info(TAG, 'stop: Called');
     this.pause();
     this.startOffset = 0;
     this.notifyStateChange();
   }
 
   /**
-   * Seek to a specific position in the track
+   * Seek to position
    */
   async seek(time: number): Promise<void> {
+    debugLog.info(TAG, 'seek: Called', { time, wasPlaying: this._isPlaying });
     const wasPlaying = this._isPlaying;
 
-    // Stop current playback
     if (wasPlaying) {
-      // CRITICAL: Set _isPlaying = false BEFORE stopping
       this._isPlaying = false;
-
-      // Clear onended handlers to prevent spurious callbacks
-      if (this.mainSource) {
-        this.mainSource.onended = null;
-      }
-      if (this.guitarSource) {
-        this.guitarSource.onended = null;
-      }
-
+      if (this.mainSource) this.mainSource.onended = null;
+      if (this.guitarSource) this.guitarSource.onended = null;
       try {
         this.mainSource?.stop();
         this.guitarSource?.stop();
       } catch {
-        // Ignore errors if already stopped
+        // Ignore
       }
     }
 
-    // Update position
     this.startOffset = Math.max(0, Math.min(time, this.getDuration()));
 
-    // Resume playback if was playing
     if (wasPlaying) {
       await this.playAsync();
     } else {
@@ -631,142 +652,88 @@ class AudioEngine {
     }
   }
 
-  /**
-   * Set playback speed (0.8 - 1.2)
-   * Applies to both main and guitar sources simultaneously
-   */
   setPlaybackRate(rate: number): void {
-    // Clamp to valid range
     this._playbackRate = Math.max(0.8, Math.min(1.2, rate));
+    debugLog.debug(TAG, 'setPlaybackRate', { rate: this._playbackRate });
 
-    // Apply to active sources using setValueAtTime for glitch-free change
     if (this.audioContext && this._isPlaying) {
       const changeTime = this.audioContext.currentTime;
-
-      if (this.mainSource) {
-        this.mainSource.playbackRate.setValueAtTime(this._playbackRate, changeTime);
-      }
-      if (this.guitarSource) {
-        this.guitarSource.playbackRate.setValueAtTime(this._playbackRate, changeTime);
-      }
+      if (this.mainSource) this.mainSource.playbackRate.setValueAtTime(this._playbackRate, changeTime);
+      if (this.guitarSource) this.guitarSource.playbackRate.setValueAtTime(this._playbackRate, changeTime);
     }
 
     this.notifyStateChange();
   }
 
-  /**
-   * Mute or unmute the guitar track
-   * Uses gain node for instant, glitch-free muting
-   */
   setGuitarMuted(muted: boolean): void {
     this.guitarMuted = muted;
+    debugLog.debug(TAG, 'setGuitarMuted', { muted });
 
     if (this.guitarGainNode && this.audioContext) {
-      // Use setValueAtTime for immediate, glitch-free change
-      this.guitarGainNode.gain.setValueAtTime(
-        muted ? 0 : 1,
-        this.audioContext.currentTime
-      );
+      this.guitarGainNode.gain.setValueAtTime(muted ? 0 : 1, this.audioContext.currentTime);
     }
   }
 
-  /**
-   * Get current playback position in seconds
-   */
   getCurrentTime(): number {
-    if (!this._isPlaying || !this.audioContext) {
-      return this.startOffset;
-    }
-
+    if (!this._isPlaying || !this.audioContext) return this.startOffset;
     const elapsed = (this.audioContext.currentTime - this.startTime) * this._playbackRate;
     return Math.min(this.startOffset + elapsed, this.getDuration());
   }
 
-  /**
-   * Get total duration of current track in seconds
-   */
   getDuration(): number {
     return this.mainBuffer?.duration ?? 0;
   }
 
-  /**
-   * Get current playback rate
-   */
   getPlaybackRate(): number {
     return this._playbackRate;
   }
 
-  /**
-   * Check if audio is currently playing
-   */
   getIsPlaying(): boolean {
     return this._isPlaying;
   }
 
-  /**
-   * Check if audio context is initialized
-   */
   getIsInitialized(): boolean {
     return this._isInitialized;
   }
 
-  /**
-   * Get current track ID
-   */
   getCurrentTrackId(): string | null {
     return this.currentTrackId;
   }
 
-  /**
-   * Register callback for track end event
-   */
   onTrackEnd(callback: () => void): void {
+    debugLog.debug(TAG, 'onTrackEnd: Callback registered');
     this.onTrackEndCallback = callback;
   }
 
-  /**
-   * Register callback for state changes
-   */
   onStateChange(callback: () => void): void {
     this.onStateChangeCallback = callback;
   }
 
-  /**
-   * Notify listeners of state change
-   */
   private notifyStateChange(): void {
     this.onStateChangeCallback?.();
   }
 
-  /**
-   * Clean up resources
-   */
   destroy(): void {
-    // Abort any pending loads
+    debugLog.info(TAG, 'destroy: Called');
     if (this.loadAbortController) {
       this.loadAbortController.abort();
       this.loadAbortController = null;
     }
 
     this.stop();
-
-    // Disconnect gain nodes
     this.mainGainNode?.disconnect();
     this.guitarGainNode?.disconnect();
 
-    // Close audio context
     if (this.audioContext && this.audioContext.state !== 'closed') {
       this.audioContext.close();
     }
 
-    // Clear cache
     this.bufferCache.clear();
   }
 }
 
 /**
  * React hook for using the audio engine
- * Provides state and methods for audio playback control
  */
 export function useAudioEngine() {
   const engineRef = useRef<AudioEngine | null>(null);
@@ -781,11 +748,10 @@ export function useAudioEngine() {
     currentTrackId: null,
   });
 
-  // Initialize engine on mount
   useEffect(() => {
+    debugLog.info('Hook', 'useAudioEngine: Mounting');
     engineRef.current = new AudioEngine();
 
-    // Register state change callback
     engineRef.current.onStateChange(() => {
       if (engineRef.current) {
         setState(prev => ({
@@ -800,19 +766,17 @@ export function useAudioEngine() {
     });
 
     return () => {
+      debugLog.info('Hook', 'useAudioEngine: Unmounting');
       engineRef.current?.destroy();
     };
   }, []);
 
-  // Update currentTime during playback using requestAnimationFrame
   useEffect(() => {
     let animationId: number;
-
     const update = () => {
       if (engineRef.current) {
         const currentTime = engineRef.current.getCurrentTime();
         setState(prev => {
-          // Only update if time has changed (avoid unnecessary re-renders)
           if (Math.abs(prev.currentTime - currentTime) > 0.01) {
             return { ...prev, currentTime };
           }
@@ -821,29 +785,24 @@ export function useAudioEngine() {
       }
       animationId = requestAnimationFrame(update);
     };
-
     update();
-
     return () => cancelAnimationFrame(animationId);
   }, []);
 
-  // Update isLoading state
   useEffect(() => {
     setState(prev => ({ ...prev, isLoading }));
   }, [isLoading]);
 
-  // Initialize audio context (must be called SYNCHRONOUSLY on user interaction)
   const initialize = useCallback(() => {
+    debugLog.info('Hook', 'initialize called');
     engineRef.current?.initialize();
   }, []);
 
-  // Load a track
   const loadTrack = useCallback(async (track: Track) => {
     if (!engineRef.current) return;
-
+    debugLog.info('Hook', 'loadTrack called', { trackId: track.id });
     setIsLoading(true);
     try {
-      // Initialize if not already
       if (!engineRef.current.getIsInitialized()) {
         engineRef.current.initialize();
       }
@@ -853,53 +812,47 @@ export function useAudioEngine() {
     }
   }, []);
 
-  // Prefetch a track (for preloading upcoming tracks)
   const prefetchTrack = useCallback(async (track: Track) => {
     if (!engineRef.current) return;
-    // Initialize if not already (needed for AudioContext)
     if (!engineRef.current.getIsInitialized()) {
       engineRef.current.initialize();
     }
     await engineRef.current.prefetchTrack(track);
   }, []);
 
-  // Play (synchronous - for user gestures)
   const play = useCallback(() => {
+    debugLog.info('Hook', 'play called (sync)');
     engineRef.current?.play();
   }, []);
 
-  // Play (async - for auto-advance and programmatic playback)
   const playAsync = useCallback(async (): Promise<boolean> => {
+    debugLog.info('Hook', 'playAsync called');
     if (!engineRef.current) return false;
     return engineRef.current.playAsync();
   }, []);
 
-  // Pause
   const pause = useCallback(() => {
+    debugLog.info('Hook', 'pause called');
     engineRef.current?.pause();
   }, []);
 
-  // Stop
   const stop = useCallback(() => {
+    debugLog.info('Hook', 'stop called');
     engineRef.current?.stop();
   }, []);
 
-  // Seek
   const seek = useCallback(async (time: number) => {
     await engineRef.current?.seek(time);
   }, []);
 
-  // Set playback rate
   const setPlaybackRate = useCallback((rate: number) => {
     engineRef.current?.setPlaybackRate(rate);
   }, []);
 
-  // Set guitar muted
   const setGuitarMuted = useCallback((muted: boolean) => {
     engineRef.current?.setGuitarMuted(muted);
   }, []);
 
-  // Register track end callback
   const onTrackEnd = useCallback((callback: () => void) => {
     engineRef.current?.onTrackEnd(callback);
   }, []);
@@ -910,7 +863,7 @@ export function useAudioEngine() {
     loadTrack,
     prefetchTrack,
     play,
-    playAsync,  // NEW: async version for auto-advance
+    playAsync,
     pause,
     stop,
     seek,
