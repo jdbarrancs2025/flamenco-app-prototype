@@ -8,10 +8,7 @@ import { PlayerControls } from '../components/player/PlayerControls';
 import { TrackList } from '../components/player/TrackList';
 import { getPlaylistById } from '../data/playlists';
 import { useAudioEngine } from '../hooks/useAudioEngine';
-import { debugLog } from '../utils/debugLogger';
 import type { Track } from '../types';
-
-const TAG = 'PlaylistView';
 
 export function PlaylistView() {
   const { playlistId } = useParams<{ playlistId: string }>();
@@ -114,32 +111,21 @@ export function PlaylistView() {
       const looping = isLoopingRef.current;
       const currentTracks = tracksRef.current;
 
-      debugLog.info(TAG, 'onTrackEnd: Callback fired', {
-        currentIndex,
-        looping,
-        tracksLength: currentTracks.length,
-        isLoadingTrack: isLoadingTrackRef.current,
-      });
-
       if (looping) {
         // Replay current track - load it again to reset position
         if (isLoadingTrackRef.current) {
-          debugLog.warn(TAG, 'onTrackEnd: Loop - already loading, skipping');
+          console.warn('[PlaylistView] onTrackEnd: Loop - already loading, skipping');
           return;
         }
         const track = currentTracks[currentIndex];
         if (track) {
           isLoadingTrackRef.current = true;
-          debugLog.info(TAG, 'onTrackEnd: Loop - loading track', { trackId: track.id });
           try {
             await loadTrack(track);
-            debugLog.info(TAG, 'onTrackEnd: Loop - track loaded, setting mute');
             setGuitarMuted(mutedTrackIdsRef.current.has(track.id));
-            debugLog.info(TAG, 'onTrackEnd: Loop - calling playAsync()');
-            const success = await playAsync();
-            debugLog.info(TAG, 'onTrackEnd: Loop - playAsync result', { success });
+            await playAsync();
           } catch (error) {
-            debugLog.error(TAG, 'onTrackEnd: Loop failed', (error as Error)?.message);
+            console.error('[PlaylistView] onTrackEnd: Loop failed', (error as Error)?.message);
           } finally {
             isLoadingTrackRef.current = false;
           }
@@ -149,33 +135,23 @@ export function PlaylistView() {
         const nextIndex = (currentIndex + 1) % currentTracks.length;
         const nextTrack = currentTracks[nextIndex];
 
-        debugLog.info(TAG, 'onTrackEnd: Advancing to next', {
-          nextIndex,
-          nextTrackId: nextTrack?.id,
-        });
-
         if (nextTrack) {
           if (isLoadingTrackRef.current) {
-            debugLog.warn(TAG, 'onTrackEnd: Advance - already loading, skipping');
+            console.warn('[PlaylistView] onTrackEnd: Advance - already loading, skipping');
             return;
           }
           isLoadingTrackRef.current = true;
           try {
             // Update the track index first
-            debugLog.info(TAG, 'onTrackEnd: Advance - setting index', { nextIndex });
             setCurrentTrackIndex(nextIndex);
             currentTrackIndexRef.current = nextIndex;
 
             // Load the next track
-            debugLog.info(TAG, 'onTrackEnd: Advance - loading track', { trackId: nextTrack.id });
             await loadTrack(nextTrack);
-            debugLog.info(TAG, 'onTrackEnd: Advance - track loaded, setting mute');
             setGuitarMuted(mutedTrackIdsRef.current.has(nextTrack.id));
-            debugLog.info(TAG, 'onTrackEnd: Advance - calling playAsync()');
-            const success = await playAsync();
-            debugLog.info(TAG, 'onTrackEnd: Advance - playAsync result', { success });
+            await playAsync();
           } catch (error) {
-            debugLog.error(TAG, 'onTrackEnd: Advance failed', (error as Error)?.message);
+            console.error('[PlaylistView] onTrackEnd: Advance failed', (error as Error)?.message);
           } finally {
             isLoadingTrackRef.current = false;
           }
@@ -194,22 +170,9 @@ export function PlaylistView() {
         audioState.duration > 0 &&
         audioState.currentTrackId === currentTrack?.id;
 
-    debugLog.debug(TAG, 'autoPlay effect check', {
-      wasPlaying: wasPlayingRef.current,
-      isLoading: audioState.isLoading,
-      duration: audioState.duration,
-      currentTrackId: audioState.currentTrackId,
-      expectedTrackId: currentTrack?.id,
-      shouldAutoPlay,
-    });
-
     if (shouldAutoPlay) {
-      debugLog.info(TAG, 'autoPlay: Triggering playAsync()');
       wasPlayingRef.current = false;  // Reset FIRST to prevent double-call
-
-      playAsync().then(success => {
-        debugLog.info(TAG, 'autoPlay: playAsync result', { success });
-      });
+      playAsync();
     }
   }, [audioState.isLoading, audioState.duration, audioState.currentTrackId, currentTrackIndex, tracks, playAsync]);
 
@@ -233,10 +196,6 @@ export function PlaylistView() {
     // Initialize audio engine first (required for prefetch to work)
     initialize();
 
-    debugLog.info(TAG, 'Aggressive prefetch: Starting for all tracks', {
-      trackCount: tracks.length
-    });
-
     // Prefetch all tracks with small delays to avoid network congestion
     const prefetchAll = async () => {
       for (let i = 0; i < tracks.length; i++) {
@@ -245,16 +204,10 @@ export function PlaylistView() {
           await new Promise(resolve => setTimeout(resolve, 100));
         }
 
-        debugLog.debug(TAG, 'Aggressive prefetch: Loading track', {
-          index: i,
-          trackId: tracks[i].id
-        });
-
         prefetchTrack(tracks[i]).catch(() => {
           // Ignore errors - prefetch is best-effort
         });
       }
-      debugLog.info(TAG, 'Aggressive prefetch: All tracks queued');
     };
 
     prefetchAll();
@@ -269,19 +222,10 @@ export function PlaylistView() {
   const isGuitarMuted = currentTrack ? mutedTrackIds.has(currentTrack.id) : false;
 
   const handlePlayPause = () => {
-    debugLog.info(TAG, 'handlePlayPause: Called', {
-      isPlaying: audioState.isPlaying,
-      isInitialized: audioState.isInitialized,
-      duration: audioState.duration,
-      currentTrackId: audioState.currentTrackId,
-    });
-
     if (audioState.isPlaying) {
-      debugLog.info(TAG, 'handlePlayPause: Pausing');
       pause();
     } else {
       // Initialize AudioContext synchronously on user gesture (iOS requirement)
-      debugLog.info(TAG, 'handlePlayPause: Initializing and playing');
       initialize();
       // Use synchronous play() here - we're in a user gesture context
       play();
@@ -359,11 +303,6 @@ export function PlaylistView() {
   };
 
   const handleSelectTrack = (index: number) => {
-    debugLog.info(TAG, 'handleSelectTrack: Called', {
-      index,
-      wasPlaying: audioState.isPlaying,
-      currentIndex: currentTrackIndex,
-    });
     // Remember if we were playing (to auto-resume after track loads)
     wasPlayingRef.current = audioState.isPlaying;
     stop();
